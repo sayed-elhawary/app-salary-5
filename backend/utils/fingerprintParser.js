@@ -1,6 +1,7 @@
 import XLSX from 'xlsx';
 import { DateTime } from 'luxon';
 import Fingerprint from '../models/Fingerprint.js';
+import User from '../models/User.js';
 
 export const parseFingerprintFile = async (file) => {
   try {
@@ -31,6 +32,8 @@ export const parseFingerprintFile = async (file) => {
       try {
         const code = row['No.']?.toString();
         const dateTimeStr = row['Date/Time'];
+        const officialLeave = row['Official Leave'] || row['الإجازة الرسمية'] || '';
+        const leaveCompensation = row['Leave Compensation'] || row['بدل الإجازة'] || '';
 
         if (!code || !dateTimeStr) {
           console.warn(`Skipping row ${index + 2}: Missing code or date/time - Code: ${code}, Date/Time: ${dateTimeStr}`);
@@ -72,11 +75,21 @@ export const parseFingerprintFile = async (file) => {
         const dateKey = dateTime.toISODate();
         const key = `${code}-${dateKey}`;
 
+        // تحليل officialLeave و leaveCompensation
+        const isOfficialLeave = ['yes', 'true', 'نعم'].includes(officialLeave.toString().toLowerCase().trim());
+        const isLeaveCompensation = ['yes', 'true', 'نعم'].includes(leaveCompensation.toString().toLowerCase().trim());
+
+        // التحقق من التضارب
+        if (isOfficialLeave && isLeaveCompensation) {
+          console.warn(`Skipping row ${index + 2}: Cannot set both officialLeave and leaveCompensation for code ${code} on ${dateKey}`);
+          continue;
+        }
+
         if (!groupedByCodeAndDate[key]) {
           groupedByCodeAndDate[key] = [];
         }
-        groupedByCodeAndDate[key].push({ dateTime, rowIndex: index + 2 });
-        console.log(`Added entry for code ${code} on ${dateKey}: ${dateTimeStr}`);
+        groupedByCodeAndDate[key].push({ dateTime, rowIndex: index + 2, officialLeave: isOfficialLeave, leaveCompensation: isLeaveCompensation });
+        console.log(`Added entry for code ${code} on ${dateKey}: ${dateTimeStr}, officialLeave=${isOfficialLeave}, leaveCompensation=${isLeaveCompensation}`);
       } catch (err) {
         console.error(`Error processing row ${index + 2}:`, err.message);
       }
@@ -84,60 +97,84 @@ export const parseFingerprintFile = async (file) => {
 
     for (const key in groupedByCodeAndDate) {
       try {
+        const [code, dateKey] = key.split('-');
+        const user = await User.findOne({ code });
+        if (!user) {
+          console.warn(`Skipping group ${key}: No user found for code ${code}`);
+          continue;
+        }
+
         const entries = groupedByCodeAndDate[key].sort((a, b) => a.dateTime.toMillis() - b.dateTime.toMillis());
         let checkIn = null;
         let checkOut = null;
+        let officialLeave = false;
+        let leaveCompensation = false;
 
-        const filteredEntries = [];
-        let lastTime = null;
-        for (const entry of entries) {
-          if (!lastTime || entry.dateTime.diff(lastTime, 'seconds').seconds >= 60) {
-            filteredEntries.push(entry.dateTime);
-            lastTime = entry.dateTime;
+        // تحديد officialLeave و leaveCompensation بناءً على أول إدخال في المجموعة
+        if (entries.length > 0) {
+          officialLeave = entries[0].officialLeave;
+          leaveCompensation = entries[0].leaveCompensation;
+        }
+
+        // إذا كان هناك إجازة رسمية أو بدل إجازة، لا حاجة لحساب checkIn/checkOut
+        if (!officialLeave && !leaveCompensation) {
+          const filteredEntries = [];
+          let lastTime = null;
+          for (const entry of entries) {
+            if (!lastTime || entry.dateTime.diff(lastTime, 'seconds').seconds >= 60) {
+              filteredEntries.push(entry.dateTime);
+              lastTime = entry.dateTime;
+            }
+          }
+
+          if (filteredEntries.length === 1) {
+            const entry = filteredEntries[0];
+            if (entry.hour < 12) {
+              checkIn = entry.toJSDate();
+            } else {
+              checkOut = entry.toJSDate();
+            }
+          } else if (filteredEntries.length > 1) {
+            checkIn = filteredEntries[0].toJSDate();
+            checkOut = filteredEntries[filteredEntries.length - 1].toJSDate();
           }
         }
 
-        if (filteredEntries.length === 1) {
-          const entry = filteredEntries[0];
-          if (entry.hour < 12) {
-            checkIn = entry.toJSDate();
-          } else {
-            checkOut = entry.toJSDate();
-          }
-        } else if (filteredEntries.length > 1) {
-          checkIn = filteredEntries[0].toJSDate();
-          checkOut = filteredEntries[filteredEntries.length - 1].toJSDate();
-        }
+        console.log(`Processing group ${key}: checkIn=${checkIn}, checkOut=${checkOut}, officialLeave=${officialLeave}, leaveCompensation=${leaveCompensation}`);
 
-        console.log(`Processing group ${key}: checkIn=${checkIn}, checkOut=${checkOut}`);
+        const existingReport = await Fingerprint.findOne({
+          code,
+          date: {
+            $gte: DateTime.fromISO(dateKey, { zone: 'Africa/Cairo' }).startOf('day').toJSDate(),
+            $lte: DateTime.fromISO(dateKey, { zone: 'Africa/Cairo' }).endOf('day').toJSDate(),
+          },
+        });
 
-        if (checkIn || checkOut) {
-          const [code, dateKey] = key.split('-');
-          const existingReport = await Fingerprint.findOne({
+        if (!existingReport) {
+          const report = new Fingerprint({
             code,
-            date: {
-              $gte: DateTime.fromISO(dateKey, { zone: 'Africa/Cairo' }).startOf('day').toJSDate(),
-              $lte: DateTime.fromISO(dateKey, { zone: 'Africa/Cairo' }).endOf('day').toJSDate(),
-            },
+            employeeName: user.fullName,
+            checkIn,
+            checkOut,
+            workHours: 0,
+            overtime: 0,
+            lateMinutes: 0,
+            lateDeduction: 0,
+            earlyLeaveDeduction: 0,
+            absence: false,
+            annualLeave: false,
+            medicalLeave: false,
+            officialLeave,
+            leaveCompensation,
+            date: entries[0].dateTime.toJSDate(),
+            workDaysPerWeek: user.workDaysPerWeek || 5,
           });
 
-          if (!existingReport) {
-            reports.push({
-              code,
-              checkIn,
-              checkOut,
-              workHours: 0,
-              overtime: 0,
-              lateMinutes: 0,
-              lateDeduction: 0,
-              earlyLeaveDeduction: 0,
-              absence: false,
-              date: filteredEntries[0].toJSDate(),
-              workDaysPerWeek: 5, // سيتم تحديثه لاحقًا
-            });
-          } else {
-            console.log(`Skipping duplicate report for code ${code} on ${dateKey}`);
-          }
+          await report.calculateAttendance();
+          reports.push(report);
+          console.log(`Created new report for code ${code} on ${dateKey}: employeeName=${user.fullName}, workDaysPerWeek=${report.workDaysPerWeek}, officialLeave=${report.officialLeave}, leaveCompensation=${report.leaveCompensation}`);
+        } else {
+          console.log(`Skipping duplicate report for code ${code} on ${dateKey}`);
         }
       } catch (err) {
         console.error(`Error processing group ${key}:`, err.message);

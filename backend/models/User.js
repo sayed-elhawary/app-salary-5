@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { DateTime } from 'luxon';
-import Fingerprint from './Fingerprint.js'; // استيراد من نفس المجلد models
+import Fingerprint from './Fingerprint.js';
 
 const userSchema = new mongoose.Schema(
   {
@@ -112,6 +112,16 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'إجمالي قيمة المخالفات يجب ألا تكون سالبة'],
     },
+    advances: {
+      type: Number,
+      default: 0,
+      min: [0, 'قيمة السلف يجب ألا تكون سالبة'],
+    },
+    totalOfficialLeaveDays: {
+      type: Number,
+      default: 0,
+      min: [0, 'إجمالي أيام الإجازة الرسمية يجب ألا يكون سالبًا'],
+    },
     lastResetDate: {
       type: Date,
       default: () => DateTime.now().setZone('Africa/Cairo').startOf('month').toJSDate(),
@@ -139,47 +149,52 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ code: 1 });
 
-// Middleware لتشفير كلمة المرور وإعادة تعيين رصيد التأخير الشهري
 userSchema.pre('save', async function (next) {
-  if (this.isModified('password')) {
-    try {
+  try {
+    if (this.isModified('password')) {
       const salt = await bcrypt.genSalt(10);
       this.password = await bcrypt.hash(this.password, salt);
       console.log(`Password hashed for user: ${this.code}`);
-    } catch (err) {
-      console.error(`Error hashing password for user ${this.code}:`, err.message);
-      return next(err);
     }
+
+    if (this.isModified('violationsInstallment')) {
+      console.log(`Updating violationsInstallment for user ${this.code}: Previous=${this.get('violationsInstallment', null, { getters: false })}, New=${this.violationsInstallment}`);
+    }
+
+    if (this.isModified('advances')) {
+      console.log(`Updating advances for user ${this.code}: Previous=${this.get('advances', null, { getters: false })}, New=${this.advances}`);
+    }
+
+    if (this.isModified('totalOfficialLeaveDays')) {
+      console.log(`Updating totalOfficialLeaveDays for user ${this.code}: Previous=${this.get('totalOfficialLeaveDays', null, { getters: false })}, New=${this.totalOfficialLeaveDays}`);
+    }
+
+    if (this.isModified('totalAnnualLeave') || this.isModified('annualLeaveBalance')) {
+      console.log(`Updating leave for user ${this.code}: totalAnnualLeave=${this.totalAnnualLeave}, annualLeaveBalance=${this.annualLeaveBalance}`);
+    }
+
+    const now = DateTime.now().setZone('Africa/Cairo');
+    const lastReset = this.lastResetDate
+      ? DateTime.fromJSDate(this.lastResetDate, { zone: 'Africa/Cairo' })
+      : now;
+
+    if (now.month !== lastReset.month || now.year !== lastReset.year) {
+      this.monthlyLateAllowance = 120;
+      this.lastResetDate = now.startOf('month').toJSDate();
+      console.log(`Reset monthlyLateAllowance for user ${this.code} to 120 on ${this.lastResetDate}`);
+    }
+
+    next();
+  } catch (err) {
+    console.error(`Error in pre-save middleware for user ${this.code}:`, err.message);
+    next(err);
   }
-
-  if (this.isModified('violationsInstallment')) {
-    console.log(`Updating violationsInstallment for user ${this.code}: Previous=${this.get('violationsInstallment', null, { getters: false })}, New=${this.violationsInstallment}`);
-  }
-
-  if (this.isModified('totalAnnualLeave') || this.isModified('annualLeaveBalance')) {
-    console.log(`Updating leave for user ${this.code}: totalAnnualLeave=${this.totalAnnualLeave}, annualLeaveBalance=${this.annualLeaveBalance}`);
-  }
-
-  const now = DateTime.now().setZone('Africa/Cairo');
-  const lastReset = this.lastResetDate
-    ? DateTime.fromJSDate(this.lastResetDate, { zone: 'Africa/Cairo' })
-    : now;
-
-  if (now.month !== lastReset.month || now.year !== lastReset.year) {
-    this.monthlyLateAllowance = 120;
-    this.lastResetDate = now.startOf('month').toJSDate();
-    console.log(`Reset monthlyLateAllowance for user ${this.code} to 120 on ${this.lastResetDate}`);
-  }
-
-  next();
 });
 
-// دالة لمقارنة كلمة المرور
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// حقل افتراضي لحساب الراتب الصافي
 userSchema.virtual('netSalary').get(async function () {
   try {
     const startDate = DateTime.now().setZone('Africa/Cairo').startOf('month').toJSDate();
@@ -192,7 +207,12 @@ userSchema.virtual('netSalary').get(async function () {
 
     const totals = fingerprints.reduce(
       (acc, report) => {
-        const isWorkDay = !report.absence && !report.annualLeave && !report.medicalLeave && !isWeeklyLeaveDay(report.date, this.workDaysPerWeek);
+        const isWorkDay = !report.absence &&
+                          !report.annualLeave &&
+                          !report.medicalLeave &&
+                          !report.officialLeave &&
+                          !report.leaveCompensation &&
+                          !isWeeklyLeaveDay(report.date, this.workDaysPerWeek);
         acc.totalWorkHours += report.workHours || 0;
         acc.totalWorkDays += isWorkDay ? 1 : 0;
         acc.totalAbsenceDays += report.absence ? 1 : 0;
@@ -203,6 +223,8 @@ userSchema.virtual('netSalary').get(async function () {
         acc.totalWeeklyLeaveDays += isWeeklyLeaveDay(report.date, this.workDaysPerWeek) ? 1 : 0;
         acc.totalAnnualLeaveDays += report.annualLeave ? 1 : 0;
         acc.totalMedicalLeaveDays += report.medicalLeave ? 1 : 0;
+        acc.totalOfficialLeaveDays += report.officialLeave ? 1 : 0;
+        acc.totalLeaveCompensationDays += report.leaveCompensation ? 1 : 0;
         return acc;
       },
       {
@@ -216,6 +238,8 @@ userSchema.virtual('netSalary').get(async function () {
         totalWeeklyLeaveDays: 0,
         totalAnnualLeaveDays: 0,
         totalMedicalLeaveDays: 0,
+        totalOfficialLeaveDays: 0,
+        totalLeaveCompensationDays: 0,
       }
     );
 
@@ -223,37 +247,48 @@ userSchema.virtual('netSalary').get(async function () {
     const hourlyRate = dailySalary / 9;
     const overtimeValue = totals.totalOvertime * hourlyRate;
     const baseMealAllowance = this.mealAllowance;
-    const mealAllowance = baseMealAllowance - (totals.totalAbsenceDays + totals.totalAnnualLeaveDays + totals.totalMedicalLeaveDays) * 50;
+    const mealAllowance = baseMealAllowance - (totals.totalAbsenceDays + totals.totalAnnualLeaveDays + totals.totalMedicalLeaveDays + totals.totalOfficialLeaveDays) * 50;
     const bonus = this.baseBonus * (this.bonusPercentage / 100);
-    const deductionsValue = (totals.totalAbsenceDays + totals.lateDeductionDays + totals.earlyLeaveDeductionDays + totals.medicalLeaveDeductionDays) * dailySalary + this.penaltiesValue + this.violationsInstallment;
+    const leaveCompensationValue = totals.totalLeaveCompensationDays * dailySalary * 2;
+    const deductionsValue = (totals.totalAbsenceDays + totals.lateDeductionDays + totals.earlyLeaveDeductionDays + totals.medicalLeaveDeductionDays) * dailySalary + this.penaltiesValue + this.violationsInstallment + this.advances;
 
     const netSalary = (
       this.baseSalary +
       mealAllowance +
       overtimeValue +
       bonus +
-      this.eidBonus -
+      this.eidBonus +
+      leaveCompensationValue -
       this.medicalInsurance -
       this.socialInsurance -
       deductionsValue
     ).toFixed(2);
 
-    console.log(`Calculated netSalary for ${this.code}: ${netSalary}, deductionsValue: ${deductionsValue}, violationsInstallment: ${this.violationsInstallment}`);
-    return netSalary;
+    console.log(`Calculated netSalary for ${this.code}: ${netSalary}, deductionsValue: ${deductionsValue}, violationsInstallment: ${this.violationsInstallment}, advances: ${this.advances}, leaveCompensationValue: ${leaveCompensationValue}`);
+    return {
+      netSalary: parseFloat(netSalary),
+      employeeName: this.fullName,
+    };
   } catch (error) {
     console.error(`Error calculating netSalary for user ${this.code}:`, error.message);
-    return 0;
+    return { netSalary: 0, employeeName: this.fullName };
   }
 });
 
-// التحقق من وجود النموذج قبل تعريفه
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+userSchema.methods.toJSON = function () {
+  const obj = this.toObject();
+  obj.employeeName = obj.fullName;
+  delete obj.fullName;
+  delete obj.password;
+  return obj;
+};
 
-export default User;
-
-// دالة مساعدة للتحقق من أيام الإجازة الأسبوعية
 const isWeeklyLeaveDay = (date, workDaysPerWeek) => {
   const dayOfWeek = DateTime.fromJSDate(date, { zone: 'Africa/Cairo' }).weekday;
   return (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
          (workDaysPerWeek === 6 && dayOfWeek === 5);
 };
+
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+
+export default User;

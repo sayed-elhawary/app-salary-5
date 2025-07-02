@@ -108,7 +108,9 @@ const MonthlySalaryReport = () => {
       (parseInt(report.totalAbsenceDays, 10) || 0) +
       (parseInt(report.totalAnnualLeaveDays, 10) || 0) +
       (parseInt(report.totalWeeklyLeaveDays, 10) || 0) +
-      (parseInt(report.totalMedicalLeaveDays, 10) || 0);
+      (parseInt(report.totalMedicalLeaveDays, 10) || 0) +
+      (parseInt(report.totalOfficialLeaveDays, 10) || 0) +
+      (parseInt(report.totalLeaveCompensationDays, 10) || 0);
 
     let updatedReport = { ...report };
 
@@ -125,9 +127,11 @@ const MonthlySalaryReport = () => {
 
     // حساب الخصومات (بالأيام)
     const lateDeductionDays = parseFloat(report.lateDeductionDays) || 0;
-    const totalDeductions = absenceDays + lateDeductionDays;
+    const medicalLeaveDeductionDays = parseFloat(report.medicalLeaveDeductionDays) || 0;
+    const totalDeductions = absenceDays + lateDeductionDays + medicalLeaveDeductionDays;
     updatedReport.totalDeductions = totalDeductions.toFixed(2);
     updatedReport.lateDeductionDays = lateDeductionDays.toFixed(2);
+    updatedReport.medicalLeaveDeductionDays = medicalLeaveDeductionDays.toFixed(2);
 
     // حساب الراتب اليومي وسعر الساعة
     const dailySalary = parseFloat(report.baseSalary) / 30;
@@ -136,12 +140,14 @@ const MonthlySalaryReport = () => {
     // حساب قيمة الخصومات
     const penaltiesValue = parseFloat(report.penaltiesValue) || 0;
     const violationsInstallment = parseFloat(report.violationsInstallment) || 0;
-    updatedReport.deductionsValue = (totalDeductions * dailySalary + penaltiesValue + violationsInstallment).toFixed(2);
+    const advances = parseFloat(report.advances) || 0;
+    updatedReport.deductionsValue = (totalDeductions * dailySalary + penaltiesValue + violationsInstallment + advances).toFixed(2);
 
     // تحديث قيم الحقول الجديدة
     updatedReport.penaltiesValue = penaltiesValue.toFixed(2);
     updatedReport.violationsInstallment = violationsInstallment.toFixed(2);
     updatedReport.totalViolationsValue = (penaltiesValue + violationsInstallment).toFixed(2);
+    updatedReport.advances = advances.toFixed(2);
 
     // حساب قيمة الساعات الإضافية
     const overtimeValue = (parseFloat(report.totalOvertime) || 0) * hourlyRate;
@@ -152,7 +158,8 @@ const MonthlySalaryReport = () => {
       parseFloat(report.baseSalary) +
       parseFloat(updatedReport.mealAllowance) +
       overtimeValue +
-      parseFloat(report.eidBonus || 0) -
+      parseFloat(report.eidBonus || 0) +
+      parseFloat(report.totalLeaveCompensationValue || 0) -
       parseFloat(report.medicalInsurance) -
       parseFloat(report.socialInsurance) -
       parseFloat(updatedReport.deductionsValue)
@@ -176,6 +183,7 @@ const MonthlySalaryReport = () => {
       totalWorkDays: report.totalWorkDays,
       totalAbsenceDays: report.totalAbsenceDays,
       lateDeductionDays: report.lateDeductionDays || '0.00',
+      medicalLeaveDeductionDays: report.medicalLeaveDeductionDays || '0.00',
       totalDeductions: report.totalDeductions,
       deductionsValue: report.deductionsValue || '0.00',
       totalOvertime: report.totalOvertime,
@@ -183,10 +191,15 @@ const MonthlySalaryReport = () => {
       totalWeeklyLeaveDays: report.totalWeeklyLeaveDays,
       totalAnnualLeaveDays: report.totalAnnualLeaveDays,
       totalMedicalLeaveDays: report.totalMedicalLeaveDays,
+      totalOfficialLeaveDays: report.totalOfficialLeaveDays || '0',
+      totalLeaveCompensationDays: report.totalLeaveCompensationDays || '0',
+      totalLeaveCompensationValue: report.totalLeaveCompensationValue || '0.00',
       totalAnnualLeaveYear: report.totalAnnualLeaveYear,
+      annualLeaveBalance: report.annualLeaveBalance || '21',
       penaltiesValue: report.penaltiesValue || '0.00',
       violationsInstallment: report.violationsInstallment || '0.00',
       totalViolationsValue: report.totalViolationsValue || '0.00',
+      advances: report.advances || '0.00',
       netSalary: report.netSalary,
       eidBonus: report.eidBonus || '0.00',
     });
@@ -240,6 +253,16 @@ const MonthlySalaryReport = () => {
         setLoading(false);
         return;
       }
+      if (parseInt(editForm.totalOfficialLeaveDays, 10) < 0) {
+        setError('أيام الإجازة الرسمية لا يمكن أن تكون سالبة');
+        setLoading(false);
+        return;
+      }
+      if (parseInt(editForm.totalLeaveCompensationDays, 10) < 0) {
+        setError('أيام بدل الإجازة لا يمكن أن تكون سالبة');
+        setLoading(false);
+        return;
+      }
       if (parseInt(editForm.totalWeeklyLeaveDays, 10) < 0) {
         setError('أيام الإجازة الأسبوعية لا يمكن أن تكون سالبة');
         setLoading(false);
@@ -247,6 +270,11 @@ const MonthlySalaryReport = () => {
       }
       if (parseFloat(editForm.eidBonus) < 0) {
         setError('العيدية لا يمكن أن تكون سالبة');
+        setLoading(false);
+        return;
+      }
+      if (parseFloat(editForm.advances) < 0) {
+        setError('السلف لا يمكن أن تكون سالبة');
         setLoading(false);
         return;
       }
@@ -258,7 +286,12 @@ const MonthlySalaryReport = () => {
       const newAnnualLeaveDays = parseInt(editForm.totalAnnualLeaveDays, 10) || 0;
       const prevMedicalLeaveDays = parseInt(editingReport.totalMedicalLeaveDays, 10) || 0;
       const newMedicalLeaveDays = parseInt(editForm.totalMedicalLeaveDays, 10) || 0;
+      const prevOfficialLeaveDays = parseInt(editingReport.totalOfficialLeaveDays, 10) || 0;
+      const newOfficialLeaveDays = parseInt(editForm.totalOfficialLeaveDays, 10) || 0;
+      const prevLeaveCompensationDays = parseInt(editingReport.totalLeaveCompensationDays, 10) || 0;
+      const newLeaveCompensationDays = parseInt(editForm.totalLeaveCompensationDays, 10) || 0;
       const lateDeductionDays = parseFloat(editingReport.lateDeductionDays) || 0;
+      const medicalLeaveDeductionDays = parseFloat(editingReport.medicalLeaveDeductionDays) || 0;
 
       const annualLeaveDaysDiff = newAnnualLeaveDays - prevAnnualLeaveDays;
 
@@ -266,14 +299,16 @@ const MonthlySalaryReport = () => {
       const dailySalary = parseFloat(editForm.baseSalary) / 30;
       const hourlyRate = dailySalary / 9;
       const overtimeValue = (parseFloat(editForm.totalOvertime) || 0) * hourlyRate;
+      const leaveCompensationValue = (newLeaveCompensationDays * dailySalary * 2).toFixed(2);
 
       // حساب الخصومات (بالأيام)
-      const updatedTotalDeductions = newAbsenceDays + lateDeductionDays;
+      const updatedTotalDeductions = newAbsenceDays + lateDeductionDays + medicalLeaveDeductionDays;
 
       // حساب قيمة الخصومات
       const penaltiesValue = parseFloat(editForm.penaltiesValue) || 0;
       const violationsInstallment = parseFloat(editForm.violationsInstallment) || 0;
-      const updatedDeductionsValue = (updatedTotalDeductions * dailySalary + penaltiesValue + violationsInstallment).toFixed(2);
+      const advances = parseFloat(editForm.advances) || 0;
+      const updatedDeductionsValue = (updatedTotalDeductions * dailySalary + penaltiesValue + violationsInstallment + advances).toFixed(2);
 
       // حساب بدل الوجبة بناءً على أيام الغياب فقط
       const baseMealAllowance = 500; // القيمة الافتراضية لبدل الوجبة
@@ -285,6 +320,8 @@ const MonthlySalaryReport = () => {
         newAbsenceDays +
         newAnnualLeaveDays +
         newMedicalLeaveDays +
+        newOfficialLeaveDays +
+        newLeaveCompensationDays +
         (parseInt(editForm.totalWeeklyLeaveDays, 10) || 0);
       let updatedWeeklyLeaveDays = parseInt(editForm.totalWeeklyLeaveDays, 10) || 0;
       if (totalDays !== 30) {
@@ -296,7 +333,8 @@ const MonthlySalaryReport = () => {
         parseFloat(editForm.baseSalary) +
         parseFloat(updatedMealAllowance) +
         overtimeValue +
-        parseFloat(editForm.eidBonus || 0) -
+        parseFloat(editForm.eidBonus || 0) +
+        parseFloat(leaveCompensationValue) -
         parseFloat(editForm.medicalInsurance) -
         parseFloat(editForm.socialInsurance) -
         parseFloat(updatedDeductionsValue)
@@ -317,7 +355,9 @@ const MonthlySalaryReport = () => {
           penaltiesValue: parseFloat(editForm.penaltiesValue) || 0,
           violationsInstallment: parseFloat(editForm.violationsInstallment) || 0,
           totalViolationsValue: (penaltiesValue + violationsInstallment).toFixed(2),
+          advances: parseFloat(editForm.advances) || 0,
           totalAnnualLeave: parseFloat(editForm.totalAnnualLeaveYear) + annualLeaveDaysDiff,
+          annualLeaveBalance: parseFloat(editForm.annualLeaveBalance) || 21,
           createdBy: user._id,
           eidBonus: parseFloat(editForm.eidBonus) || 0,
         },
@@ -337,13 +377,17 @@ const MonthlySalaryReport = () => {
                 totalDeductions: updatedTotalDeductions.toFixed(2),
                 deductionsValue: updatedDeductionsValue,
                 overtimeValue: overtimeValue.toFixed(2),
+                leaveCompensationValue: leaveCompensationValue,
                 lateDeductionDays: lateDeductionDays.toFixed(2),
+                medicalLeaveDeductionDays: medicalLeaveDeductionDays.toFixed(2),
                 penaltiesValue: penaltiesValue.toFixed(2),
                 violationsInstallment: violationsInstallment.toFixed(2),
                 totalViolationsValue: (penaltiesValue + violationsInstallment).toFixed(2),
+                advances: advances.toFixed(2),
                 netSalary: updatedNetSalary,
                 totalWeeklyLeaveDays: updatedWeeklyLeaveDays,
                 totalAnnualLeaveYear: parseFloat(editForm.totalAnnualLeaveYear) + annualLeaveDaysDiff,
+                annualLeaveBalance: parseFloat(editForm.annualLeaveBalance) || 21,
                 eidBonus: parseFloat(editForm.eidBonus) || 0,
               }
             : report
@@ -375,11 +419,17 @@ const MonthlySalaryReport = () => {
         'إجمالي قيمة المخالفات',
         'قسط المخالفات',
         'قيمة الجزاءات',
+        'السلف',
         'قيمة الخصومات',
         'إجمالي الخصومات (أيام)',
         'خصم التأخير (أيام)',
+        'خصم الإجازة الطبية (أيام)',
         'إجمالي أيام الإجازة السنوية (السنة)',
+        'رصيد الإجازة السنوية',
         'إجمالي أيام الإجازة الطبية',
+        'إجمالي أيام الإجازة الرسمية',
+        'إجمالي أيام بدل الإجازة',
+        'قيمة بدل الإجازة',
         'إجمالي أيام الإجازة السنوية (الفترة)',
         'إجمالي أيام الإجازة الأسبوعية',
         'قيمة الساعات الإضافية',
@@ -403,11 +453,17 @@ const MonthlySalaryReport = () => {
         'إجمالي قيمة المخالفات': parseFloat(report.totalViolationsValue || 0).toFixed(2),
         'قسط المخالفات': parseFloat(report.violationsInstallment || 0).toFixed(2),
         'قيمة الجزاءات': parseFloat(report.penaltiesValue || 0).toFixed(2),
+        'السلف': parseFloat(report.advances || 0).toFixed(2),
         'قيمة الخصومات': parseFloat(report.deductionsValue || 0).toFixed(2),
         'إجمالي الخصومات (أيام)': parseFloat(report.totalDeductions).toFixed(2),
         'خصم التأخير (أيام)': parseFloat(report.lateDeductionDays || 0).toFixed(2),
+        'خصم الإجازة الطبية (أيام)': parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2),
         'إجمالي أيام الإجازة السنوية (السنة)': parseInt(report.totalAnnualLeaveYear, 10) || 0,
+        'رصيد الإجازة السنوية': parseInt(report.annualLeaveBalance, 10) || 21,
         'إجمالي أيام الإجازة الطبية': parseInt(report.totalMedicalLeaveDays, 10) || 0,
+        'إجمالي أيام الإجازة الرسمية': parseInt(report.totalOfficialLeaveDays, 10) || 0,
+        'إجمالي أيام بدل الإجازة': parseInt(report.totalLeaveCompensationDays, 10) || 0,
+        'قيمة بدل الإجازة': parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2),
         'إجمالي أيام الإجازة السنوية (الفترة)': parseInt(report.totalAnnualLeaveDays, 10) || 0,
         'إجمالي أيام الإجازة الأسبوعية': parseInt(report.totalWeeklyLeaveDays, 10) || 0,
         'قيمة الساعات الإضافية': parseFloat(report.overtimeValue).toFixed(2),
@@ -431,11 +487,17 @@ const MonthlySalaryReport = () => {
         'إجمالي قيمة المخالفات': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalViolationsValue || 0), 0).toFixed(2),
         'قسط المخالفات': salaryReports.reduce((sum, report) => sum + parseFloat(report.violationsInstallment || 0), 0).toFixed(2),
         'قيمة الجزاءات': salaryReports.reduce((sum, report) => sum + parseFloat(report.penaltiesValue || 0), 0).toFixed(2),
+        'السلف': salaryReports.reduce((sum, report) => sum + parseFloat(report.advances || 0), 0).toFixed(2),
         'قيمة الخصومات': salaryReports.reduce((sum, report) => sum + parseFloat(report.deductionsValue || 0), 0).toFixed(2),
         'إجمالي الخصومات (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalDeductions || 0), 0).toFixed(2),
         'خصم التأخير (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
+        'خصم الإجازة الطبية (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalLeaveDeductionDays || 0), 0).toFixed(2),
         'إجمالي أيام الإجازة السنوية (السنة)': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveYear, 10) || 0), 0),
+        'رصيد الإجازة السنوية': salaryReports.reduce((sum, report) => sum + (parseInt(report.annualLeaveBalance, 10) || 21), 0),
         'إجمالي أيام الإجازة الطبية': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalMedicalLeaveDays, 10) || 0), 0),
+        'إجمالي أيام الإجازة الرسمية': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalOfficialLeaveDays, 10) || 0), 0),
+        'إجمالي أيام بدل الإجازة': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalLeaveCompensationDays, 10) || 0), 0),
+        'قيمة بدل الإجازة': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalLeaveCompensationValue || 0), 0).toFixed(2),
         'إجمالي أيام الإجازة السنوية (الفترة)': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveDays, 10) || 0), 0),
         'إجمالي أيام الإجازة الأسبوعية': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalWeeklyLeaveDays, 10) || 0), 0),
         'قيمة الساعات الإضافية': salaryReports.reduce((sum, report) => sum + parseFloat(report.overtimeValue || 0), 0).toFixed(2),
@@ -536,11 +598,17 @@ const MonthlySalaryReport = () => {
                       'إجمالي قيمة المخالفات',
                       'قسط المخالفات',
                       'قيمة الجزاءات',
+                      'السلف',
                       'قيمة الخصومات',
                       'إجمالي الخصومات (أيام)',
                       'خصم التأخير (أيام)',
+                      'خصم الإجازة الطبية (أيام)',
                       'إجمالي أيام الإجازة السنوية (السنة)',
+                      'رصيد الإجازة السنوية',
                       'إجمالي أيام الإجازة الطبية',
+                      'إجمالي أيام الإجازة الرسمية',
+                      'إجمالي أيام بدل الإجازة',
+                      'قيمة بدل الإجازة',
                       'إجمالي أيام الإجازة السنوية (الفترة)',
                       'إجمالي أيام الإجازة الأسبوعية',
                       'قيمة الساعات الإضافية',
@@ -573,7 +641,7 @@ const MonthlySalaryReport = () => {
                               ],
                             }),
                           ],
-                          width: { size: 4.17, type: WidthType.PERCENTAGE },
+                          width: { size: 3.33, type: WidthType.PERCENTAGE },
                         })
                     ),
                   }),
@@ -586,11 +654,17 @@ const MonthlySalaryReport = () => {
                           parseFloat(report.totalViolationsValue || 0).toFixed(2),
                           parseFloat(report.violationsInstallment || 0).toFixed(2),
                           parseFloat(report.penaltiesValue || 0).toFixed(2),
+                          parseFloat(report.advances || 0).toFixed(2),
                           parseFloat(report.deductionsValue || 0).toFixed(2),
                           parseFloat(report.totalDeductions).toFixed(2),
                           parseFloat(report.lateDeductionDays || 0).toFixed(2),
+                          parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2),
                           parseInt(report.totalAnnualLeaveYear, 10).toString() || '0',
+                          parseInt(report.annualLeaveBalance, 10).toString() || '21',
                           parseInt(report.totalMedicalLeaveDays, 10).toString() || '0',
+                          parseInt(report.totalOfficialLeaveDays, 10).toString() || '0',
+                          parseInt(report.totalLeaveCompensationDays, 10).toString() || '0',
+                          parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2),
                           parseInt(report.totalAnnualLeaveDays, 10).toString() || '0',
                           parseInt(report.totalWeeklyLeaveDays, 10).toString() || '0',
                           parseFloat(report.overtimeValue).toFixed(2),
@@ -622,7 +696,7 @@ const MonthlySalaryReport = () => {
                                   ],
                                 }),
                               ],
-                              width: { size: 4.17, type: WidthType.PERCENTAGE },
+                              width: { size: 3.33, type: WidthType.PERCENTAGE },
                             })
                         ),
                       })
@@ -634,11 +708,17 @@ const MonthlySalaryReport = () => {
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.totalViolationsValue || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.violationsInstallment || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.penaltiesValue || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.advances || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.deductionsValue || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.totalDeductions || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalLeaveDeductionDays || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveYear, 10) || 0), 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + (parseInt(report.annualLeaveBalance, 10) || 21), 0).toString(),
                       salaryReports.reduce((sum, report) => sum + (parseInt(report.totalMedicalLeaveDays, 10) || 0), 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalOfficialLeaveDays, 10) || 0), 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalLeaveCompensationDays, 10) || 0), 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.totalLeaveCompensationValue || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveDays, 10) || 0), 0).toString(),
                       salaryReports.reduce((sum, report) => sum + (parseInt(report.totalWeeklyLeaveDays, 10) || 0), 0).toString(),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.overtimeValue || 0), 0).toFixed(2),
@@ -671,7 +751,7 @@ const MonthlySalaryReport = () => {
                               ],
                             }),
                           ],
-                          width: { size: 4.17, type: WidthType.PERCENTAGE },
+                          width: { size: 3.33, type: WidthType.PERCENTAGE },
                         })
                     ),
                   }),
@@ -693,70 +773,73 @@ const MonthlySalaryReport = () => {
   // إذا لم يكن المستخدم أدمن، لا يتم عرض الصفحة
   if (!user || user.role !== 'admin') return null;
 
-  return (
+
+
+
+return (
     <div className="min-h-screen bg-gray-100">
       <NavBar />
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-4 sm:p-6">
         {/* قسم البحث */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-6"
+          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 mb-6"
         >
-          <h2 className="text-xl font-semibold text-gray-700 mb-4 text-right">البحث في تقرير المرتب الشهري</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">البحث في تقرير المرتب الشهري</h2>
           {error && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right"
+              className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm"
             >
               {error}
             </motion.div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                 كود الموظف
               </label>
               <input
                 type="text"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                 placeholder="أدخل كود الموظف"
               />
             </div>
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                 من تاريخ
               </label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
               />
             </div>
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                 إلى تاريخ
               </label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
               />
             </div>
           </div>
-          <div className="flex justify-end gap-4 mt-4">
+          <div className="flex flex-wrap justify-end gap-2 sm:gap-4 mt-4">
             <motion.button
               onClick={handleSearch}
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 ${
+              className={`bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -767,7 +850,7 @@ const MonthlySalaryReport = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-300 ${
+              className={`bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-300 text-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -778,7 +861,7 @@ const MonthlySalaryReport = () => {
               disabled={loading || salaryReports.length === 0}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-300 ${
+              className={`bg-green-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-300 text-sm ${
                 loading || salaryReports.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -789,7 +872,7 @@ const MonthlySalaryReport = () => {
               disabled={loading || salaryReports.length === 0}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`bg-blue-800 text-white px-4 py-2 rounded-md hover:bg-blue-900 transition-colors duration-300 ${
+              className={`bg-blue-800 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-blue-900 transition-colors duration-300 text-sm ${
                 loading || salaryReports.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -805,25 +888,25 @@ const MonthlySalaryReport = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-6 rounded-xl shadow-lg w-full max-w-4xl"
+                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-xl font-semibold text-gray-700 mb-4 text-right">تعديل تقرير المرتب</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">تعديل تقرير المرتب</h2>
                 {error && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right"
+                    className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm"
                   >
                     {error}
                   </motion.div>
                 )}
-                <form onSubmit={handleEditSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <form onSubmit={handleEditSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       كود الموظف
                     </label>
                     <input
@@ -831,13 +914,13 @@ const MonthlySalaryReport = () => {
                       name="code"
                       value={editForm.code}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       required
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       الاسم الكامل
                     </label>
                     <input
@@ -845,12 +928,12 @@ const MonthlySalaryReport = () => {
                       name="fullName"
                       value={editForm.fullName}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       القسم
                     </label>
                     <input
@@ -858,12 +941,12 @@ const MonthlySalaryReport = () => {
                       name="department"
                       value={editForm.department}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       الراتب الأساسي
                     </label>
                     <input
@@ -871,14 +954,14 @@ const MonthlySalaryReport = () => {
                       name="baseSalary"
                       value={editForm.baseSalary}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       required
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       التأمين الطبي
                     </label>
                     <input
@@ -886,13 +969,13 @@ const MonthlySalaryReport = () => {
                       name="medicalInsurance"
                       value={editForm.medicalInsurance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       التأمين الاجتماعي
                     </label>
                     <input
@@ -900,13 +983,13 @@ const MonthlySalaryReport = () => {
                       name="socialInsurance"
                       value={editForm.socialInsurance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       عيدية
                     </label>
                     <input
@@ -914,25 +997,25 @@ const MonthlySalaryReport = () => {
                       name="eidBonus"
                       value={editForm.eidBonus}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       بدل الوجبة
                     </label>
                     <input
                       type="number"
                       name="mealAllowance"
                       value={editForm.mealAllowance}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed"
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي ساعات العمل
                     </label>
                     <input
@@ -940,13 +1023,13 @@ const MonthlySalaryReport = () => {
                       name="totalWorkHours"
                       value={editForm.totalWorkHours}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي أيام العمل
                     </label>
                     <input
@@ -954,12 +1037,12 @@ const MonthlySalaryReport = () => {
                       name="totalWorkDays"
                       value={editForm.totalWorkDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي أيام الغياب
                     </label>
                     <input
@@ -967,48 +1050,60 @@ const MonthlySalaryReport = () => {
                       name="totalAbsenceDays"
                       value={editForm.totalAbsenceDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       خصم التأخير (أيام)
                     </label>
                     <input
                       type="number"
                       name="lateDeductionDays"
                       value={editForm.lateDeductionDays}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed"
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                      خصم الإجازة الطبية (أيام)
+                    </label>
+                    <input
+                      type="number"
+                      name="medicalLeaveDeductionDays"
+                      value={editForm.medicalLeaveDeductionDays}
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي الخصومات (أيام)
                     </label>
                     <input
                       type="number"
                       name="totalDeductions"
                       value={editForm.totalDeductions}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed"
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       قيمة الخصومات
                     </label>
                     <input
                       type="number"
                       name="deductionsValue"
                       value={editForm.deductionsValue}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed"
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي الساعات الإضافية
                     </label>
                     <input
@@ -1016,25 +1111,25 @@ const MonthlySalaryReport = () => {
                       name="totalOvertime"
                       value={editForm.totalOvertime}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       قيمة الساعات الإضافية
                     </label>
                     <input
                       type="number"
                       name="overtimeValue"
                       value={editForm.overtimeValue}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed"
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي أيام الإجازة الأسبوعية
                     </label>
                     <input
@@ -1042,12 +1137,12 @@ const MonthlySalaryReport = () => {
                       name="totalWeeklyLeaveDays"
                       value={editForm.totalWeeklyLeaveDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي أيام الإجازة السنوية (الفترة)
                     </label>
                     <input
@@ -1055,12 +1150,12 @@ const MonthlySalaryReport = () => {
                       name="totalAnnualLeaveDays"
                       value={editForm.totalAnnualLeaveDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي أيام الإجازة الطبية
                     </label>
                     <input
@@ -1068,12 +1163,50 @@ const MonthlySalaryReport = () => {
                       name="totalMedicalLeaveDays"
                       value={editForm.totalMedicalLeaveDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                      إجمالي أيام الإجازة الرسمية
+                    </label>
+                    <input
+                      type="number"
+                      name="totalOfficialLeaveDays"
+                      value={editForm.totalOfficialLeaveDays}
+                      onChange={handleEditChange}
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                      إجمالي أيام بدل الإجازة
+                    </label>
+                    <input
+                      type="number"
+                      name="totalLeaveCompensationDays"
+                      value={editForm.totalLeaveCompensationDays}
+                      onChange={handleEditChange}
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                      قيمة بدل الإجازة
+                    </label>
+                    <input
+                      type="number"
+                      name="totalLeaveCompensationValue"
+                      value={editForm.totalLeaveCompensationValue}
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي أيام الإجازة السنوية (السنة)
                     </label>
                     <input
@@ -1081,12 +1214,25 @@ const MonthlySalaryReport = () => {
                       name="totalAnnualLeaveYear"
                       value={editForm.totalAnnualLeaveYear}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                      رصيد الإجازة السنوية
+                    </label>
+                    <input
+                      type="number"
+                      name="annualLeaveBalance"
+                      value={editForm.annualLeaveBalance}
+                      onChange={handleEditChange}
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       قيمة الجزاءات
                     </label>
                     <input
@@ -1094,13 +1240,13 @@ const MonthlySalaryReport = () => {
                       name="penaltiesValue"
                       value={editForm.penaltiesValue}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       قسط المخالفات
                     </label>
                     <input
@@ -1108,32 +1254,44 @@ const MonthlySalaryReport = () => {
                       name="violationsInstallment"
                       value={editForm.violationsInstallment}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
                       إجمالي قيمة المخالفات
                     </label>
                     <input
                       type="number"
                       name="totalViolationsValue"
                       value={editForm.totalViolationsValue}
+                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                      السلف
+                    </label>
+                    <input
+                      type="number"
+                      name="advances"
+                      value={editForm.advances}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
                       min="0"
                       step="0.01"
                     />
                   </div>
-                  <div className="md:col-span-3 flex justify-end gap-4">
+                  <div className="sm:col-span-3 flex justify-end gap-2 sm:gap-4">
                     <motion.button
                       type="submit"
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 ${
+                      className={`bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1144,7 +1302,7 @@ const MonthlySalaryReport = () => {
                       onClick={handleEditCancel}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-300"
+                      className="bg-gray-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-300 text-sm"
                     >
                       إلغاء
                     </motion.button>
@@ -1161,86 +1319,104 @@ const MonthlySalaryReport = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white p-6 rounded-xl shadow-md border border-gray-100"
+            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100"
           >
-            <h2 className="text-xl font-semibold text-gray-700 mb-4 text-right">تقرير المرتب الشهري</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">تقرير المرتب الشهري</h2>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       كود الموظف
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       الاسم
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       القسم
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       الراتب الأساسي
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       التأمين الطبي
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       التأمين الاجتماعي
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       بدل الوجبة
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       عيدية
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي ساعات العمل
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي أيام العمل
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي أيام الغياب
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       خصم التأخير (أيام)
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      خصم الإجازة الطبية (أيام)
+                    </th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي الخصومات (أيام)
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       قيمة الخصومات
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي الساعات الإضافية
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       قيمة الساعات الإضافية
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي أيام الإجازة الأسبوعية
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي أيام الإجازة السنوية (الفترة)
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي أيام الإجازة الطبية
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      إجمالي أيام الإجازة الرسمية
+                    </th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      إجمالي أيام بدل الإجازة
+                    </th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      قيمة بدل الإجازة
+                    </th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي أيام الإجازة السنوية (السنة)
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      رصيد الإجازة السنوية
+                    </th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       قيمة الجزاءات
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       قسط المخالفات
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجمالي قيمة المخالفات
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      السلف
+                    </th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       الراتب الصافي
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       إجراءات
                     </th>
                   </tr>
@@ -1248,36 +1424,42 @@ const MonthlySalaryReport = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {salaryReports.map((report, index) => (
                     <tr key={index}>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{report.code}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{report.fullName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{report.department}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.baseSalary).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.medicalInsurance).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.socialInsurance).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.mealAllowance).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.eidBonus || 0).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.totalWorkHours).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseInt(report.totalWorkDays, 10) || 0}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseInt(report.totalAbsenceDays, 10) || 0}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.lateDeductionDays || 0).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.totalDeductions).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.deductionsValue || 0).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.totalOvertime).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.overtimeValue).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseInt(report.totalWeeklyLeaveDays, 10) || 0}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseInt(report.totalAnnualLeaveDays, 10) || 0}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseInt(report.totalMedicalLeaveDays, 10) || 0}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseInt(report.totalAnnualLeaveYear, 10) || 0}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.penaltiesValue || 0).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.violationsInstallment || 0).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.totalViolationsValue || 0).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">{parseFloat(report.netSalary).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{report.code}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{report.fullName}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{report.department}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.baseSalary).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.medicalInsurance).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.socialInsurance).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.mealAllowance).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.eidBonus || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalWorkHours).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalWorkDays, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalAbsenceDays, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.lateDeductionDays || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalDeductions).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.deductionsValue || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalOvertime).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.overtimeValue).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalWeeklyLeaveDays, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalAnnualLeaveDays, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalMedicalLeaveDays, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalOfficialLeaveDays, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalLeaveCompensationDays, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalAnnualLeaveYear, 10) || 0}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.annualLeaveBalance, 10) || 21}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.penaltiesValue || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.violationsInstallment || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalViolationsValue || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.advances || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.netSalary).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">
                         <motion.button
                           onClick={() => handleEditClick(report)}
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          className="bg-yellow-500 text-white px-3 py-1 rounded-md hover:bg-yellow-600 transition-colors duration-300"
+                          className="bg-yellow-500 text-white px-3 py-1 rounded-md hover:bg-yellow-600 transition-colors duration-300 text-xs sm:text-sm"
                         >
                           تعديل
                         </motion.button>
@@ -1295,9 +1477,9 @@ const MonthlySalaryReport = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-white p-6 rounded-xl shadow-md border border-gray-100 text-center"
+            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 text-center"
           >
-            <p className="text-gray-700">لا توجد تقارير متاحة. يرجى البحث أو عرض جميع التقارير.</p>
+            <p className="text-gray-700 text-sm sm:text-base">لا توجد تقارير متاحة. يرجى البحث أو عرض جميع التقارير.</p>
           </motion.div>
         )}
 
