@@ -13,38 +13,39 @@ const LoadingSpinner = () => (
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50"
   >
     <div className="relative">
       <motion.div
-        className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-t-transparent border-blue-500 rounded-full"
+        className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-t-transparent border-sky-400 rounded-full"
         animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
       />
-      <span className="absolute inset-0 flex items-center justify-center text-white text-sm sm:text-base">
+      <span className="absolute inset-0 flex items-center justify-center text-gray-200 text-sm sm:text-base">
         جارٍ التحميل...
       </span>
     </div>
   </motion.div>
 );
 
-// مكون علامة الصح المحسنة
+// مكون علامة الصح المحسنة بتصميم جديد
 const SuccessCheckmark = () => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
     transition={{ duration: 0.5 }}
-    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pointer-events-none"
+    className="fixed inset-0 bg-gradient-to-br from-gray-900/60 to-zinc-800/60 flex items-center justify-center z-50 pointer-events-none"
   >
     <motion.div
       initial={{ scale: 0, rotate: -180 }}
-      animate={{ scale: 1, rotate: 0 }}
-      transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-      className="bg-green-600 bg-opacity-90 rounded-full p-6 sm:p-8 w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center shadow-2xl"
+      animate={{ scale: 1, rotate: 360 }}
+      transition={{ type: 'spring', stiffness: 150, damping: 20, duration: 2 }}
+      className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-[12px] p-8 sm:p-10 w-32 h-32 sm:w-36 sm:h-36 flex items-center justify-center shadow-xl border border-teal-200/50"
+      style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} // شكل سداسي
     >
       <svg
-        className="w-10 h-10 sm:w-12 sm:h-12 text-white"
+        className="w-16 h-16 sm:w-18 sm:h-18 text-white"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -53,11 +54,11 @@ const SuccessCheckmark = () => (
         <motion.path
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth="2"
-          d="M5 13l4 4L19 7"
+          strokeWidth="2.5"
+          d="M12 2l2 7h7l-5 4 2 7-6-4-6 4 2-7-5-4h7z" // رمز نجمة
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          transition={{ duration: 1.5, ease: 'easeInOut' }}
         />
       </svg>
     </motion.div>
@@ -601,7 +602,7 @@ const UploadFingerprint = () => {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-red-100 text-red-700 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6 text-right text-sm sm:text-base"
+            className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6 text-right text-sm sm:text-base"
           >
             {errorMessage}
           </motion.div>
@@ -617,9 +618,9 @@ const UploadFingerprint = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 mb-4 sm:mb-6"
+          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-200 mb-4 sm:mb-6"
         >
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">رفع ملف البصمات</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">رفع ملف البصمات</h2>
           <form onSubmit={handleUpload} className="space-y-4">
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
@@ -629,7 +630,7 @@ const UploadFingerprint = () => {
                 type="file"
                 accept=".xlsx, .xls"
                 onChange={handleFileChange}
-                className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                 disabled={loading}
               />
             </div>
@@ -638,7 +639,7 @@ const UploadFingerprint = () => {
               disabled={loading || !file}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
                 loading || !file ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -652,9 +653,9 @@ const UploadFingerprint = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 mb-4 sm:mb-6"
+          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-200 mb-4 sm:mb-6"
         >
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">البحث في التقارير</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">البحث في التقارير</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
@@ -664,7 +665,7 @@ const UploadFingerprint = () => {
                 type="text"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                 placeholder="أدخل كود الموظف"
                 disabled={loading}
               />
@@ -677,7 +678,7 @@ const UploadFingerprint = () => {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                 disabled={loading}
               />
             </div>
@@ -689,7 +690,7 @@ const UploadFingerprint = () => {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                 disabled={loading}
               />
             </div>
@@ -700,7 +701,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -711,7 +712,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-zinc-600 text-white px-4 py-2 rounded-md hover:bg-zinc-700 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-zinc-600 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -722,7 +723,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-sky-600 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -733,7 +734,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-amber-500 text-white px-4 py-2 rounded-md hover:bg-amber-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-amber-500 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -744,7 +745,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-cyan-600 text-white px-4 py-2 rounded-md hover:bg-cyan-700 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-cyan-600 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -755,7 +756,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-lime-500 text-white px-4 py-2 rounded-md hover:bg-lime-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-lime-500 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -766,7 +767,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-300 text-sm sm:text-base ${
+              className={`w-full sm:w-auto bg-red-800 text-white px-4 py-2 rounded-md hover:bg-red-900 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-red-800 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -779,7 +780,7 @@ const UploadFingerprint = () => {
                 type="checkbox"
                 checked={showSingleFingerprint}
                 onChange={() => setShowSingleFingerprint(!showSingleFingerprint)}
-                className="mr-2"
+                className="mr-2 accent-sky-600"
                 disabled={loading}
               />
               عرض البصمات الفردية فقط
@@ -789,7 +790,7 @@ const UploadFingerprint = () => {
                 type="checkbox"
                 checked={showAbsenceDays}
                 onChange={() => setShowAbsenceDays(!showAbsenceDays)}
-                className="mr-2"
+                className="mr-2 accent-sky-600"
                 disabled={loading}
               />
               عرض أيام الغياب فقط
@@ -804,13 +805,13 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
             >
               <motion.div
                 className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">إضافة إجازة رسمية</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة إجازة رسمية</h2>
                 <form onSubmit={handleCreateOfficialLeave} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
@@ -819,7 +820,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={officialLeaveDetails.applyToAll}
                         onChange={handleOfficialLeaveChange}
-                        className="mr-2"
+                        className="mr-2 accent-sky-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -835,7 +836,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={officialLeaveDetails.code}
                         onChange={handleOfficialLeaveChange}
-                        className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -851,7 +852,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={officialLeaveDetails.dateFrom}
                       onChange={handleOfficialLeaveChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -865,7 +866,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={officialLeaveDetails.dateTo}
                       onChange={handleOfficialLeaveChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -876,7 +877,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -888,7 +889,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -908,13 +909,13 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
             >
               <motion.div
                 className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">إضافة بدل إجازة</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة بدل إجازة</h2>
                 <form onSubmit={handleCreateLeaveCompensation} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
@@ -923,7 +924,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={leaveCompensationDetails.applyToAll}
                         onChange={handleLeaveCompensationChange}
-                        className="mr-2"
+                        className="mr-2 accent-sky-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -939,7 +940,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={leaveCompensationDetails.code}
                         onChange={handleLeaveCompensationChange}
-                        className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -955,7 +956,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={leaveCompensationDetails.dateFrom}
                       onChange={handleLeaveCompensationChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -969,7 +970,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={leaveCompensationDetails.dateTo}
                       onChange={handleLeaveCompensationChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -980,7 +981,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -992,7 +993,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1012,13 +1013,13 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
             >
               <motion.div
                 className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">إضافة إجازة طبية</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة إجازة طبية</h2>
                 <form onSubmit={handleCreateMedicalLeave} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
@@ -1027,7 +1028,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={medicalLeaveDetails.applyToAll}
                         onChange={handleMedicalLeaveChange}
-                        className="mr-2"
+                        className="mr-2 accent-sky-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -1043,7 +1044,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={medicalLeaveDetails.code}
                         onChange={handleMedicalLeaveChange}
-                        className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -1059,7 +1060,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={medicalLeaveDetails.dateFrom}
                       onChange={handleMedicalLeaveChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -1073,7 +1074,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={medicalLeaveDetails.dateTo}
                       onChange={handleMedicalLeaveChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -1084,7 +1085,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1096,7 +1097,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1116,13 +1117,13 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
             >
               <motion.div
                 className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">إضافة إجازة سنوية</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة إجازة سنوية</h2>
                 <form onSubmit={handleCreateAnnualLeave} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
@@ -1131,7 +1132,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={annualLeaveDetails.applyToAll}
                         onChange={handleAnnualLeaveChange}
-                        className="mr-2"
+                        className="mr-2 accent-sky-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -1147,7 +1148,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={annualLeaveDetails.code}
                         onChange={handleAnnualLeaveChange}
-                        className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -1163,7 +1164,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={annualLeaveDetails.dateFrom}
                       onChange={handleAnnualLeaveChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -1177,7 +1178,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={annualLeaveDetails.dateTo}
                       onChange={handleAnnualLeaveChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
                       required
                       disabled={loading}
                     />
@@ -1188,7 +1189,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1200,7 +1201,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-300 text-sm sm:text-base ${
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1219,64 +1220,64 @@ const UploadFingerprint = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 mb-4 sm:mb-6"
+            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-200 mb-4 sm:mb-6"
           >
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">التقارير</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">التقارير</h2>
             <div className="overflow-x-auto">
               <ReportTable reports={filteredReports} onEdit={handleEditReport} />
             </div>
             <div className="mt-6 text-right">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">إجماليات الفترة</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg shadow-inner">
-                <div className="bg-blue-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-sky-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي ساعات العمل</p>
-                  <p className="text-sm sm:text-lg font-bold text-blue-700">{totals.totalWorkHours} ساعة</p>
+                  <p className="text-sm sm:text-lg font-bold text-sky-700">{totals.totalWorkHours} ساعة</p>
                 </div>
-                <div className="bg-green-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-emerald-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام العمل</p>
-                  <p className="text-sm sm:text-lg font-bold text-green-700">{totals.totalWorkDays} يوم</p>
+                  <p className="text-sm sm:text-lg font-bold text-emerald-700">{totals.totalWorkDays} يوم</p>
                 </div>
-                <div className="bg-red-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-red-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الغياب</p>
                   <p className="text-sm sm:text-lg font-bold text-red-700">{totals.totalAbsenceDays} يوم</p>
                 </div>
-                <div className="bg-orange-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-amber-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام التأخير</p>
-                  <p className="text-sm sm:text-lg font-bold text-orange-700">{totals.totalLateDays} يوم</p>
+                  <p className="text-sm sm:text-lg font-bold text-amber-700">{totals.totalLateDays} يوم</p>
                 </div>
-                <div className="bg-yellow-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-yellow-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الخصومات</p>
                   <p className="text-sm sm:text-lg font-bold text-yellow-700">{totals.totalDeductions} يوم</p>
                 </div>
-                <div className="bg-purple-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-purple-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الساعات الإضافية</p>
                   <p className="text-sm sm:text-lg font-bold text-purple-700">{totals.totalOvertime} ساعة</p>
                 </div>
-                <div className="bg-indigo-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-zinc-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الأسبوعية</p>
-                  <p className="text-sm sm:text-lg font-bold text-indigo-700">{totals.totalWeeklyLeaveDays} يوم</p>
+                  <p className="text-sm sm:text-lg font-bold text-zinc-700">{totals.totalWeeklyLeaveDays} يوم</p>
                 </div>
-                <div className="bg-teal-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-lime-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة السنوية</p>
-                  <p className="text-sm sm:text-lg font-bold text-teal-700">{totals.totalAnnualLeaveDays} يوم</p>
+                  <p className="text-sm sm:text-lg font-bold text-lime-700">{totals.totalAnnualLeaveDays} يوم</p>
                 </div>
-                <div className="bg-pink-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-cyan-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الطبية</p>
-                  <p className="text-sm sm:text-lg font-bold text-pink-700">{totals.totalMedicalLeaveDays} يوم</p>
+                  <p className="text-sm sm:text-lg font-bold text-cyan-700">{totals.totalMedicalLeaveDays} يوم</p>
                 </div>
-                <div className="bg-cyan-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-teal-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الرسمية</p>
-                  <p className="text-sm sm:text-lg font-bold text-cyan-700">{totals.totalOfficialLeaveDays} يوم</p>
+                  <p className="text-sm sm:text-lg font-bold text-teal-700">{totals.totalOfficialLeaveDays} يوم</p>
                 </div>
-                <div className="bg-amber-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-amber-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام بدل الإجازة</p>
                   <p className="text-sm sm:text-lg font-bold text-amber-700">{totals.totalLeaveCompensationDays} يوم</p>
                 </div>
-                <div className="bg-lime-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-lime-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي قيمة بدل الإجازة</p>
                   <p className="text-sm sm:text-lg font-bold text-lime-700">{totals.totalLeaveCompensationValue} جنيه</p>
                 </div>
-                <div className="bg-gray-100 p-3 sm:p-4 rounded-lg text-right">
+                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg text-right">
                   <p className="text-xs sm:text-sm font-medium text-gray-600">رصيد الإجازات السنوية</p>
                   <p className="text-sm sm:text-lg font-bold text-gray-700">{totals.annualLeaveBalance} يوم</p>
                 </div>

@@ -1,14 +1,58 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
 import Fingerprint from '../models/Fingerprint.js';
 import User from '../models/User.js';
 import { parseFingerprintFile } from '../utils/fingerprintParser.js';
 import { DateTime } from 'luxon';
 
 const router = express.Router();
-const upload = multer();
 
+// إعداد دليل التخزين
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadDir = path.join(__dirname, '../Uploads');
+
+// التأكد من وجود الدليل
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// إعداد multer لتخزين الملفات على القرص
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${uniqueSuffix}-${file.originalname}`);
+  },
+});
+
+// فلتر للتأكد من أن الملفات هي Excel فقط
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'application/vnd.ms-excel', // .xls
+  ];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only Excel files (.xlsx, .xls) are allowed'), false);
+  }
+};
+
+// إعداد multer
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter,
+});
+
+// باقي الكود (الوظائف الأخرى) دون تغيير
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
@@ -169,6 +213,164 @@ async function handleEarlyLeaveDeduction(report) {
   }
 }
 
+// مسار رفع الملف
+router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      console.error('No file uploaded in request');
+      return res.status(400).json({ message: 'لم يتم رفع ملف' });
+    }
+
+    console.log(`File uploaded: ${file.path}, Size: ${file.size} bytes`);
+    let reports = await parseFingerprintFile(file);
+    if (!reports || reports.length === 0) {
+      console.error('No valid reports parsed from file');
+      fs.unlinkSync(file.path); // حذف الملف في حالة الفشل
+      return res.status(400).json({ message: 'لا توجد بيانات صالحة في الملف' });
+    }
+
+    const finalReports = [];
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+
+    for (const report of reports) {
+      try {
+        const user = await User.findOne({ code: report.code });
+        if (!user) {
+          console.warn(`Skipping report for non-existent user code ${report.code}`);
+          skippedCount++;
+          continue;
+        }
+
+        const date = DateTime.fromJSDate(report.date, { zone: 'Africa/Cairo' });
+        if (!date.isValid) {
+          console.warn(`Skipping report with invalid date for code ${report.code}: ${report.date}`);
+          skippedCount++;
+          continue;
+        }
+
+        const existingReport = await Fingerprint.findOne({
+          code: report.code,
+          date: {
+            $gte: date.startOf('day').toJSDate(),
+            $lte: date.endOf('day').toJSDate(),
+          },
+        });
+
+        let fingerprint;
+        if (existingReport) {
+          console.log(`Updating existing report for code ${report.code} on ${date.toISODate()}`);
+          fingerprint = existingReport;
+          if (!fingerprint.annualLeave) {
+            fingerprint.checkIn = report.checkIn || existingReport.checkIn;
+            fingerprint.checkOut = report.checkOut || existingReport.checkOut;
+            fingerprint.workDaysPerWeek = user.workDaysPerWeek || 6;
+            fingerprint.employeeName = user.fullName || 'غير معروف';
+            fingerprint.monthlyLateAllowance = user.monthlyLateAllowance || 120;
+            fingerprint.customAnnualLeave = user.customAnnualLeave || 0;
+            fingerprint.annualLeaveBalance = user.annualLeaveBalance || 21;
+            fingerprint.advances = user.advances || 0;
+            fingerprint.annualLeave = false;
+            fingerprint.medicalLeave = false;
+            fingerprint.officialLeave = false;
+            fingerprint.leaveCompensation = 0;
+            fingerprint.medicalLeaveDeduction = 0;
+            await fingerprint.calculateAttendance();
+            await handleLateDeduction(fingerprint);
+            await handleEarlyLeaveDeduction(fingerprint);
+          } else {
+            console.log(`Skipping update for code ${report.code} on ${date.toISODate()} due to existing annual leave`);
+            skippedCount++;
+          }
+          await fingerprint.save();
+          updatedCount++;
+          console.log(`Updated fingerprint for code ${fingerprint.code} on ${date.toISODate()}`);
+        } else {
+          fingerprint = new Fingerprint({
+            ...report,
+            workDaysPerWeek: user.workDaysPerWeek || 6,
+            employeeName: user.fullName || 'غير معروف',
+            monthlyLateAllowance: user.monthlyLateAllowance || 120,
+            customAnnualLeave: user.customAnnualLeave || 0,
+            annualLeaveBalance: user.annualLeaveBalance || 21,
+            advances: user.advances || 0,
+            annualLeave: false,
+            medicalLeave: false,
+            officialLeave: false,
+            leaveCompensation: 0,
+            medicalLeaveDeduction: 0,
+          });
+          await fingerprint.calculateAttendance();
+          await handleLateDeduction(fingerprint);
+          await handleEarlyLeaveDeduction(fingerprint);
+          await fingerprint.save();
+          createdCount++;
+          console.log(`Created fingerprint for code ${fingerprint.code} on ${date.toISODate()}`);
+        }
+
+        finalReports.push({
+          ...fingerprint.toObject(),
+          employeeName: user.fullName || 'غير معروف',
+          workDaysPerWeek: fingerprint.workDaysPerWeek,
+          monthlyLateAllowance: user.monthlyLateAllowance || 120,
+          customAnnualLeave: user.customAnnualLeave || 0,
+          annualLeaveBalance: user.annualLeaveBalance || 21,
+          advances: user.advances || 0,
+          weeklyLeaveDays: isWeeklyLeaveDay(fingerprint.date, fingerprint.workDaysPerWeek) ? 1 : 0,
+          annualLeaveDays: fingerprint.annualLeave ? 1 : 0,
+          medicalLeaveDays: fingerprint.medicalLeave ? 1 : 0,
+          officialLeaveDays: fingerprint.officialLeave ? 1 : 0,
+          leaveCompensationDays: fingerprint.leaveCompensation ? 1 : 0,
+          annualLeave: fingerprint.annualLeave ? 'نعم' : 'لا',
+          medicalLeave: fingerprint.medicalLeave ? 'نعم' : 'لا',
+          officialLeave: fingerprint.officialLeave ? 'نعم' : 'لا',
+          leaveCompensation: fingerprint.leaveCompensation ? parseFloat(fingerprint.leaveCompensation).toFixed(2) : 'لا',
+          absence: fingerprint.absence ? 'نعم' : 'لا',
+          isSingleFingerprint: fingerprint.isSingleFingerprint ? 'نعم' : '',
+          checkIn: fingerprint.checkIn ? DateTime.fromJSDate(fingerprint.checkIn, { zone: 'Africa/Cairo' }).toFormat('hh:mm:ss a') : null,
+          checkOut: fingerprint.checkOut ? DateTime.fromJSDate(fingerprint.checkOut, { zone: 'Africa/Cairo' }).toFormat('hh:mm:ss a') : null,
+          date: DateTime.fromJSDate(fingerprint.date, { zone: 'Africa/Cairo' }).toISODate(),
+        });
+      } catch (err) {
+        console.error(`Error processing report for code ${report.code}:`, err.message);
+        skippedCount++;
+      }
+    }
+
+    // حذف الملف بعد المعالجة
+    try {
+      fs.unlinkSync(file.path);
+      console.log(`Deleted temporary file: ${file.path}`);
+    } catch (err) {
+      console.error(`Error deleting file ${file.path}:`, err.message);
+    }
+
+    console.log(`Upload completed: ${createdCount} records created, ${updatedCount} records updated, ${skippedCount} records skipped`);
+    res.json({
+      message: 'تم رفع الملف ومعالجة البيانات بنجاح',
+      createdCount,
+      updatedCount,
+      skippedCount,
+      reports: finalReports,
+    });
+  } catch (error) {
+    console.error('Error in upload route:', error.message);
+    // محاولة حذف الملف في حالة الخطأ
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+        console.log(`Deleted temporary file due to error: ${req.file.path}`);
+      } catch (err) {
+        console.error(`Error deleting file ${req.file.path}:`, err.message);
+      }
+    }
+    res.status(500).json({ message: 'خطأ في معالجة الملف', error: error.message });
+  }
+});
+
+// باقي المسارات (دون تغيير)
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { code, date, checkIn, checkOut, absence, annualLeave, medicalLeave, officialLeave, leaveCompensation } = req.body;
@@ -291,132 +493,6 @@ router.post('/', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error creating fingerprint:', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'خطأ في إنشاء/تحديث السجل', details: err.message });
-  }
-});
-
-router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
-  try {
-    const file = req.file;
-    if (!file) {
-      console.error('No file uploaded in request');
-      return res.status(400).json({ message: 'لم يتم رفع ملف' });
-    }
-
-    let reports = await parseFingerprintFile(file);
-    if (!reports || reports.length === 0) {
-      console.error('No valid reports parsed from file');
-      return res.status(400).json({ message: 'لا توجد بيانات صالحة في الملف' });
-    }
-
-    const finalReports = [];
-    let createdCount = 0;
-    let updatedCount = 0;
-
-    for (const report of reports) {
-      try {
-        const user = await User.findOne({ code: report.code });
-        if (!user) {
-          console.warn(`Skipping report for non-existent user code ${report.code}`);
-          continue;
-        }
-
-        const date = DateTime.fromJSDate(report.date, { zone: 'Africa/Cairo' });
-        if (!date.isValid) {
-          console.warn(`Skipping report with invalid date for code ${report.code}: ${report.date}`);
-          continue;
-        }
-
-        const existingReport = await Fingerprint.findOne({
-          code: report.code,
-          date: {
-            $gte: date.startOf('day').toJSDate(),
-            $lte: date.endOf('day').toJSDate(),
-          },
-        });
-
-        let fingerprint;
-        if (existingReport) {
-          console.log(`Updating existing report for code ${report.code} on ${date.toISODate()}`);
-          fingerprint = existingReport;
-          if (!fingerprint.annualLeave) {
-            fingerprint.checkIn = report.checkIn || existingReport.checkIn;
-            fingerprint.checkOut = report.checkOut || existingReport.checkOut;
-            fingerprint.workDaysPerWeek = user.workDaysPerWeek || 6;
-            fingerprint.employeeName = user.fullName || 'غير معروف';
-            fingerprint.monthlyLateAllowance = user.monthlyLateAllowance || 120;
-            fingerprint.customAnnualLeave = user.customAnnualLeave || 0;
-            fingerprint.annualLeaveBalance = user.annualLeaveBalance || 21;
-            fingerprint.advances = user.advances || 0;
-            fingerprint.annualLeave = false;
-            fingerprint.medicalLeave = false;
-            fingerprint.officialLeave = false;
-            fingerprint.leaveCompensation = 0;
-            fingerprint.medicalLeaveDeduction = 0;
-            await fingerprint.calculateAttendance();
-            await handleLateDeduction(fingerprint);
-            await handleEarlyLeaveDeduction(fingerprint);
-          } else {
-            console.log(`Skipping update for code ${report.code} on ${date.toISODate()} due to existing annual leave`);
-          }
-          await fingerprint.save();
-          updatedCount++;
-          console.log(`Updated fingerprint for code ${fingerprint.code} on ${date.toISODate()}`);
-        } else {
-          fingerprint = new Fingerprint({
-            ...report,
-            workDaysPerWeek: user.workDaysPerWeek || 6,
-            employeeName: user.fullName || 'غير معروف',
-            monthlyLateAllowance: user.monthlyLateAllowance || 120,
-            customAnnualLeave: user.customAnnualLeave || 0,
-            annualLeaveBalance: user.annualLeaveBalance || 21,
-            advances: user.advances || 0,
-            annualLeave: false,
-            medicalLeave: false,
-            officialLeave: false,
-            leaveCompensation: 0,
-            medicalLeaveDeduction: 0,
-          });
-          await fingerprint.calculateAttendance();
-          await handleLateDeduction(fingerprint);
-          await handleEarlyLeaveDeduction(fingerprint);
-          await fingerprint.save();
-          createdCount++;
-          console.log(`Created fingerprint for code ${fingerprint.code} on ${date.toISODate()}`);
-        }
-
-        finalReports.push({
-          ...fingerprint.toObject(),
-          employeeName: user.fullName || 'غير معروف',
-          workDaysPerWeek: fingerprint.workDaysPerWeek,
-          monthlyLateAllowance: user.monthlyLateAllowance || 120,
-          customAnnualLeave: user.customAnnualLeave || 0,
-          annualLeaveBalance: user.annualLeaveBalance || 21,
-          advances: user.advances || 0,
-          weeklyLeaveDays: isWeeklyLeaveDay(fingerprint.date, fingerprint.workDaysPerWeek) ? 1 : 0,
-          annualLeaveDays: fingerprint.annualLeave ? 1 : 0,
-          medicalLeaveDays: fingerprint.medicalLeave ? 1 : 0,
-          officialLeaveDays: fingerprint.officialLeave ? 1 : 0,
-          leaveCompensationDays: fingerprint.leaveCompensation ? 1 : 0,
-          annualLeave: fingerprint.annualLeave ? 'نعم' : 'لا',
-          medicalLeave: fingerprint.medicalLeave ? 'نعم' : 'لا',
-          officialLeave: fingerprint.officialLeave ? 'نعم' : 'لا',
-          leaveCompensation: fingerprint.leaveCompensation ? parseFloat(fingerprint.leaveCompensation).toFixed(2) : 'لا',
-          absence: fingerprint.absence ? 'نعم' : 'لا',
-          isSingleFingerprint: fingerprint.isSingleFingerprint ? 'نعم' : '',
-          checkIn: fingerprint.checkIn ? DateTime.fromJSDate(fingerprint.checkIn, { zone: 'Africa/Cairo' }).toFormat('hh:mm:ss a') : null,
-          checkOut: fingerprint.checkOut ? DateTime.fromJSDate(fingerprint.checkOut, { zone: 'Africa/Cairo' }).toFormat('hh:mm:ss a') : null,
-          date: DateTime.fromJSDate(fingerprint.date, { zone: 'Africa/Cairo' }).toISODate(),
-        });
-      } catch (err) {
-        console.error(`Error processing report for code ${report.code}:`, err.message);
-      }
-    }
-
-    console.log(`Upload completed: ${createdCount} records created, ${updatedCount} records updated`);
-    res.json({ message: 'تم رفع الملف ومعالجة البيانات بنجاح', reports: finalReports });
-  } catch (error) {
-    console.error('Error in upload route:', error.message);
-    res.status(500).json({ message: 'خطأ في معالجة الملف', error: error.message });
   }
 });
 
@@ -1119,6 +1195,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+
 router.post('/official-leave', authMiddleware, async (req, res) => {
   try {
     const { code, dateFrom, dateTo } = req.body;
@@ -1252,6 +1329,8 @@ router.post('/official-leave', authMiddleware, async (req, res) => {
   }
 });
 
+
+
 router.post('/leave-compensation', authMiddleware, async (req, res) => {
   try {
     const { code, dateFrom, dateTo } = req.body;
@@ -1384,142 +1463,12 @@ router.post('/leave-compensation', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'خطأ في إنشاء/تحديث بدل الإجازة', error: error.message });
   }
 });
-router.post('/medical-leave', authMiddleware, async (req, res) => {
-  try {
-    const { code, dateFrom, dateTo } = req.body;
-    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' });
-    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' });
-
-    if (!startDate.isValid || !endDate.isValid) {
-      console.error('Invalid date range:', { dateFrom, dateTo });
-      return res.status(400).json({ error: 'تاريخ البداية أو النهاية غير صالح' });
-    }
-
-    if (startDate > endDate) {
-      console.error('Start date is after end date:', { dateFrom, dateTo });
-      return res.status(400).json({ error: 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية' });
-    }
-
-    const users = code ? [await User.findOne({ code })] : await User.find();
-    if (code && !users[0]) {
-      console.error(`User not found for code ${code}`);
-      return res.status(404).json({ error: 'المستخدم غير موجود' });
-    }
-
-    const reports = [];
-    for (const user of users) {
-      let currentDate = startDate;
-      while (currentDate <= endDate) {
-        const dateStr = currentDate.toISODate();
-        const workDaysPerWeek = user.workDaysPerWeek || 6;
-        const isWeekly = isWeeklyLeaveDay(currentDate.toJSDate(), workDaysPerWeek);
-
-        if (!isWeekly) {
-          const existingReport = await Fingerprint.findOne({
-            code: user.code,
-            date: {
-              $gte: currentDate.startOf('day').toJSDate(),
-              $lte: currentDate.endOf('day').toJSDate(),
-            },
-          });
-
-          let fingerprint;
-          if (existingReport) {
-            console.log(`Updating existing report for medical leave for ${user.code} on ${dateStr}`);
-            fingerprint = existingReport;
-            fingerprint.checkIn = null;
-            fingerprint.checkOut = null;
-            fingerprint.workHours = 0;
-            fingerprint.overtime = 0;
-            fingerprint.lateMinutes = 0;
-            fingerprint.lateDeduction = 0;
-            fingerprint.earlyLeaveDeduction = 0;
-            fingerprint.absence = false;
-            fingerprint.annualLeave = false;
-            fingerprint.medicalLeave = true;
-            fingerprint.officialLeave = false;
-            fingerprint.leaveCompensation = 0;
-            fingerprint.medicalLeaveDeduction = 0;
-            fingerprint.employeeName = user.fullName || 'غير معروف';
-            fingerprint.monthlyLateAllowance = user.monthlyLateAllowance || 120;
-            fingerprint.customAnnualLeave = user.customAnnualLeave || 0;
-            fingerprint.annualLeaveBalance = user.annualLeaveBalance || 21;
-            fingerprint.advances = user.advances || 0;
-          } else {
-            console.log(`Creating new report for medical leave for ${user.code} on ${dateStr}`);
-            fingerprint = new Fingerprint({
-              code: user.code,
-              date: currentDate.toJSDate(),
-              checkIn: null,
-              checkOut: null,
-              workHours: 0,
-              overtime: 0,
-              lateMinutes: 0,
-              lateDeduction: 0,
-              earlyLeaveDeduction: 0,
-              absence: false,
-              annualLeave: false,
-              medicalLeave: true,
-              officialLeave: false,
-              leaveCompensation: 0,
-              medicalLeaveDeduction: 0,
-              isSingleFingerprint: false,
-              workDaysPerWeek,
-              employeeName: user.fullName || 'غير معروف',
-              monthlyLateAllowance: user.monthlyLateAllowance || 120,
-              customAnnualLeave: user.customAnnualLeave || 0,
-              annualLeaveBalance: user.annualLeaveBalance || 21,
-              advances: user.advances || 0
-            });
-          }
-
-          await fingerprint.calculateAttendance();
-          await fingerprint.save();
-          reports.push(fingerprint);
-        }
-        currentDate = currentDate.plus({ days: 1 });
-      }
-    }
-
-    const responseReports = await Promise.all(
-      reports.map(async report => {
-        const user = await User.findOne({ code: report.code });
-        const workDaysPerWeek = user ? user.workDaysPerWeek : 6;
-        return {
-          ...report.toObject(),
-          employeeName: user ? user.fullName : 'غير معروف',
-          workDaysPerWeek,
-          monthlyLateAllowance: user ? user.monthlyLateAllowance : 120,
-          customAnnualLeave: user ? user.customAnnualLeave : 0,
-          annualLeaveBalance: user ? user.annualLeaveBalance : 21,
-          advances: user ? user.advances : 0,
-          weeklyLeaveDays: isWeeklyLeaveDay(report.date, workDaysPerWeek) ? 1 : 0,
-          annualLeaveDays: report.annualLeave ? 1 : 0,
-          medicalLeaveDays: report.medicalLeave ? 1 : 0,
-          officialLeaveDays: report.officialLeave ? 1 : 0,
-          leaveCompensationDays: report.leaveCompensation ? 1 : 0,
-          checkIn: report.checkIn ? DateTime.fromJSDate(report.checkIn, { zone: 'Africa/Cairo' }).toFormat('hh:mm:ss a') : null,
-          checkOut: report.checkOut ? DateTime.fromJSDate(report.checkOut, { zone: 'Africa/Cairo' }).toFormat('hh:mm:ss a') : null,
-          date: DateTime.fromJSDate(report.date, { zone: 'Africa/Cairo' }).toISODate(),
-          absence: report.absence ? 'نعم' : 'لا',
-          annualLeave: report.annualLeave ? 'نعم' : 'لا',
-          medicalLeave: report.medicalLeave ? 'نعم' : 'لا',
-          officialLeave: report.officialLeave ? 'نعم' : 'لا',
-          leaveCompensation: report.leaveCompensation ? parseFloat(report.leaveCompensation).toFixed(2) : 'لا',
-          isSingleFingerprint: report.isSingleFingerprint ? 'نعم' : '',
-        };
-      })
-    );
-    res.json({ message: 'تم إنشاء/تحديث الإجازة الطبية بنجاح', reports: responseReports });
-  } catch (error) {
-    console.error('Error in medical-leave route:', error.message);
-    res.status(500).json({ message: 'خطأ في إنشاء/تحديث الإجازة الطبية', error: error.message });
-  }
-});
 
 router.post('/annual-leave', authMiddleware, async (req, res) => {
   try {
+    console.log('Request body:', req.body);
     const { code, dateFrom, dateTo } = req.body;
+    const cleanCode = code ? code.trim() : code; // تنظيف الـ code من المسافات
     const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' });
     const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' });
 
@@ -1533,24 +1482,41 @@ router.post('/annual-leave', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية' });
     }
 
-    const users = code ? [await User.findOne({ code })] : await User.find();
-    if (code && !users[0]) {
-      console.error(`User not found for code ${code}`);
+    const users = cleanCode ? [await User.findOne({ code: cleanCode })] : await User.find();
+    console.log('Users found:', users.length, users.map(u => u.code));
+    if (cleanCode && !users[0]) {
+      console.error(`User not found for code ${cleanCode}`);
       return res.status(404).json({ error: 'المستخدم غير موجود' });
+    }
+    if (!cleanCode && users.length === 0) {
+      console.error('No users found in the database');
+      return res.status(404).json({ error: 'لا يوجد مستخدمين في قاعدة البيانات' });
     }
 
     const reports = [];
     for (const user of users) {
-      const leaveDays = calculateWorkDaysInRange(dateFrom, dateTo, user.workDaysPerWeek || 6);
-      if (user.annualLeaveBalance < leaveDays) {
-        console.error(`Insufficient annual leave balance for ${user.code}: ${user.annualLeaveBalance} < ${leaveDays}`);
+      const totalDays = endDate.diff(startDate, 'days').days + 1;
+      const workDaysPerWeek = user.workDaysPerWeek || 6;
+      let requiredLeaveDays = 0;
+
+      // حساب عدد الأيام غير الأسبوعية في النطاق
+      let tempDate = startDate;
+      while (tempDate <= endDate) {
+        if (!isWeeklyLeaveDay(tempDate.toJSDate(), workDaysPerWeek)) {
+          requiredLeaveDays++;
+        }
+        tempDate = tempDate.plus({ days: 1 });
+      }
+
+      // التحقق من كفاية رصيد الإجازة السنوية
+      if ((user.annualLeaveBalance || 21) < requiredLeaveDays) {
+        console.error(`Insufficient annual leave balance for code ${user.code}: ${user.annualLeaveBalance} days available, ${requiredLeaveDays} days required`);
         return res.status(400).json({ error: `رصيد الإجازة السنوية غير كافٍ للمستخدم ${user.code}` });
       }
 
       let currentDate = startDate;
       while (currentDate <= endDate) {
         const dateStr = currentDate.toISODate();
-        const workDaysPerWeek = user.workDaysPerWeek || 6;
         const isWeekly = isWeeklyLeaveDay(currentDate.toJSDate(), workDaysPerWeek);
 
         if (!isWeekly) {
@@ -1566,9 +1532,15 @@ router.post('/annual-leave', authMiddleware, async (req, res) => {
           if (existingReport) {
             console.log(`Updating existing report for annual leave for ${user.code} on ${dateStr}`);
             fingerprint = existingReport;
-            fingerprint.checkIn = null;
-            fingerprint.checkOut = null;
-            fingerprint.workHours = 0;
+            // خصم يوم من رصيد الإجازة السنوية فقط إذا لم يكن السجل الأصلي إجازة سنوية
+            if (!existingReport.annualLeave) {
+              user.annualLeaveBalance = (user.annualLeaveBalance || 21) - 1;
+              await user.save();
+              console.log(`Deducted 1 day from annualLeaveBalance for ${user.code}. New balance: ${user.annualLeaveBalance}`);
+            }
+            fingerprint.checkIn = DateTime.fromJSDate(currentDate.toJSDate(), { zone: 'Africa/Cairo' }).set({ hour: 8, minute: 30 }).toJSDate();
+            fingerprint.checkOut = DateTime.fromJSDate(currentDate.toJSDate(), { zone: 'Africa/Cairo' }).set({ hour: 17, minute: 30 }).toJSDate();
+            fingerprint.workHours = 8;
             fingerprint.overtime = 0;
             fingerprint.lateMinutes = 0;
             fingerprint.lateDeduction = 0;
@@ -1586,12 +1558,15 @@ router.post('/annual-leave', authMiddleware, async (req, res) => {
             fingerprint.advances = user.advances || 0;
           } else {
             console.log(`Creating new report for annual leave for ${user.code} on ${dateStr}`);
+            user.annualLeaveBalance = (user.annualLeaveBalance || 21) - 1;
+            await user.save();
+            console.log(`Deducted 1 day from annualLeaveBalance for ${user.code}. New balance: ${user.annualLeaveBalance}`);
             fingerprint = new Fingerprint({
               code: user.code,
               date: currentDate.toJSDate(),
-              checkIn: null,
-              checkOut: null,
-              workHours: 0,
+              checkIn: DateTime.fromJSDate(currentDate.toJSDate(), { zone: 'Africa/Cairo' }).set({ hour: 8, minute: 30 }).toJSDate(),
+              checkOut: DateTime.fromJSDate(currentDate.toJSDate(), { zone: 'Africa/Cairo' }).set({ hour: 17, minute: 30 }).toJSDate(),
+              workHours: 8,
               overtime: 0,
               lateMinutes: 0,
               lateDeduction: 0,
@@ -1612,13 +1587,6 @@ router.post('/annual-leave', authMiddleware, async (req, res) => {
             });
           }
 
-          if (!existingReport || !existingReport.annualLeave) {
-            user.annualLeaveBalance -= 1;
-            await user.save();
-            console.log(`Deducted 1 day from annualLeaveBalance for ${user.code}. New balance: ${user.annualLeaveBalance}`);
-          }
-
-          fingerprint.annualLeaveBalance = user.annualLeaveBalance;
           await fingerprint.calculateAttendance();
           await fingerprint.save();
           reports.push(fingerprint);
@@ -1662,5 +1630,4 @@ router.post('/annual-leave', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'خطأ في إنشاء/تحديث الإجازة السنوية', error: error.message });
   }
 });
-
 export default router;

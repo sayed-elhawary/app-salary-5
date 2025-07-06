@@ -1,13 +1,23 @@
 FROM node:18-alpine
 
+# إعداد دليل العمل
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+# نسخ ملفات package.json وتثبيت التبعيات
+COPY package*.json ./
 RUN npm install
 
+# نسخ باقي ملفات التطبيق
 COPY . .
 
-# Ensure node is available
-RUN which node || apk add --no-cache nodejs
+# إنشاء دليل Uploads
+RUN mkdir -p /app/Uploads
 
-CMD ["node", "server.js"]
+# تحديد Volume لتخزين الملفات
+VOLUME /app/Uploads
+
+# تعيين المنفذ
+EXPOSE 3000
+
+# أمر تشغيل التطبيق
+CMD ["npm", "start"]

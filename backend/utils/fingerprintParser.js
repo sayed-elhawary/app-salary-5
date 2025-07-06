@@ -2,15 +2,30 @@ import XLSX from 'xlsx';
 import { DateTime } from 'luxon';
 import Fingerprint from '../models/Fingerprint.js';
 import User from '../models/User.js';
+import fs from 'fs';
+import path from 'path';
+
+async function logMissingUserCode(code) {
+  const logEntry = `${new Date().toISOString()}: No user found for code ${code}\n`;
+  try {
+    const logDir = '/app/Logs/';
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    fs.appendFileSync(path.join(logDir, 'missing_users.log'), logEntry);
+  } catch (err) {
+    console.error(`Failed to log missing user code ${code}:`, err.message);
+  }
+}
 
 export const parseFingerprintFile = async (file) => {
   try {
-    if (!file || !file.buffer) {
-      console.error('No file or file buffer provided');
+    if (!file || !file.path) {
+      console.error('No file path provided');
       throw new Error('لم يتم توفير ملف صالح');
     }
 
-    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const workbook = XLSX.readFile(file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     if (!sheet) {
       console.error('No sheets found in the Excel file');
@@ -30,7 +45,7 @@ export const parseFingerprintFile = async (file) => {
 
     for (const [index, row] of data.entries()) {
       try {
-        const code = row['No.']?.toString();
+        const code = row['No.']?.toString().trim().replace(/\s+/g, '');
         const dateTimeStr = row['Date/Time'];
         const officialLeave = row['Official Leave'] || row['الإجازة الرسمية'] || '';
         const leaveCompensation = row['Leave Compensation'] || row['بدل الإجازة'] || '';
@@ -75,11 +90,9 @@ export const parseFingerprintFile = async (file) => {
         const dateKey = dateTime.toISODate();
         const key = `${code}-${dateKey}`;
 
-        // تحليل officialLeave و leaveCompensation
         const isOfficialLeave = ['yes', 'true', 'نعم'].includes(officialLeave.toString().toLowerCase().trim());
         const isLeaveCompensation = ['yes', 'true', 'نعم'].includes(leaveCompensation.toString().toLowerCase().trim());
 
-        // التحقق من التضارب
         if (isOfficialLeave && isLeaveCompensation) {
           console.warn(`Skipping row ${index + 2}: Cannot set both officialLeave and leaveCompensation for code ${code} on ${dateKey}`);
           continue;
@@ -100,8 +113,8 @@ export const parseFingerprintFile = async (file) => {
         const [code, dateKey] = key.split('-');
         const user = await User.findOne({ code });
         if (!user) {
-          console.warn(`Skipping group ${key}: No user found for code ${code}`);
-          continue;
+          console.warn(`No user found for code ${code}, using default values`);
+          await logMissingUserCode(code);
         }
 
         const entries = groupedByCodeAndDate[key].sort((a, b) => a.dateTime.toMillis() - b.dateTime.toMillis());
@@ -111,15 +124,13 @@ export const parseFingerprintFile = async (file) => {
         let leaveCompensation = 0;
         let isSingleFingerprint = false;
 
-        // تحديد officialLeave و leaveCompensation بناءً على أول إدخال في المجموعة
         if (entries.length > 0) {
           officialLeave = entries[0].officialLeave;
           if (entries[0].leaveCompensation) {
-            leaveCompensation = (user.baseSalary / 30 * 2).toFixed(2);
+            leaveCompensation = user ? (user.baseSalary / 30 * 2).toFixed(2) : 0;
           }
         }
 
-        // إذا كان هناك إجازة رسمية أو بدل إجازة، لا حاجة لحساب checkIn/checkOut
         if (!officialLeave && !leaveCompensation) {
           const filteredEntries = [];
           let lastTime = null;
@@ -154,32 +165,53 @@ export const parseFingerprintFile = async (file) => {
           },
         });
 
-        if (!existingReport) {
-          const report = new Fingerprint({
-            code,
-            employeeName: user.fullName,
-            checkIn,
-            checkOut,
-            workHours: isSingleFingerprint ? 9 : 0,
-            overtime: 0,
-            lateMinutes: 0,
-            lateDeduction: 0,
-            earlyLeaveDeduction: 0,
-            absence: false,
-            annualLeave: false,
-            medicalLeave: false,
-            officialLeave,
-            leaveCompensation,
-            date: entries[0].dateTime.toJSDate(),
-            workDaysPerWeek: user.workDaysPerWeek || 6,
-            isSingleFingerprint,
-          });
+        const report = existingReport || new Fingerprint({
+          code,
+          employeeName: user ? user.fullName : 'غير معروف',
+          checkIn,
+          checkOut,
+          workHours: isSingleFingerprint ? 9 : 0,
+          overtime: 0,
+          lateMinutes: 0,
+          lateDeduction: 0,
+          earlyLeaveDeduction: 0,
+          absence: false,
+          annualLeave: false,
+          medicalLeave: false,
+          officialLeave,
+          leaveCompensation,
+          date: entries[0].dateTime.toJSDate(),
+          workDaysPerWeek: user ? user.workDaysPerWeek : 6,
+          isSingleFingerprint,
+          customAnnualLeave: user ? user.customAnnualLeave : 0,
+          annualLeaveBalance: user ? user.annualLeaveBalance : 21,
+          advances: user ? user.advances : 0,
+        });
 
-          await report.calculateAttendance();
-          reports.push(report);
-          console.log(`Created new report for code ${code} on ${dateKey}: employeeName=${user.fullName}, workDaysPerWeek=${report.workDaysPerWeek}, officialLeave=${report.officialLeave}, leaveCompensation=${report.leaveCompensation}, isSingleFingerprint=${report.isSingleFingerprint}`);
+        if (existingReport) {
+          // تحديث التقرير الموجود
+          existingReport.checkIn = checkIn;
+          existingReport.checkOut = checkOut;
+          existingReport.workHours = isSingleFingerprint ? 9 : 0;
+          existingReport.officialLeave = officialLeave;
+          existingReport.leaveCompensation = leaveCompensation;
+          console.log(`Updating report for code ${code} on ${dateKey}`);
         } else {
-          console.log(`Skipping duplicate report for code ${code} on ${dateKey}`);
+          console.log(`Creating new report for code ${code} on ${dateKey}: employeeName=${report.employeeName}, workDaysPerWeek=${report.workDaysPerWeek}, officialLeave=${report.officialLeave}, leaveCompensation=${report.leaveCompensation}, isSingleFingerprint=${report.isSingleFingerprint}`);
+        }
+
+        try {
+          await report.calculateAttendance();
+          await report.save();
+          if (!existingReport) {
+            reports.push(report);
+          }
+        } catch (err) {
+          console.error(`Error calculating attendance for code ${code} on ${dateKey}:`, err.message);
+          // لا تزال التقارير تُنشأ حتى لو فشل calculateAttendance
+          if (!existingReport) {
+            reports.push(report);
+          }
         }
       } catch (err) {
         console.error(`Error processing group ${key}:`, err.message);

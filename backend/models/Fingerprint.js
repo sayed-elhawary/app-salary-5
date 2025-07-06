@@ -96,17 +96,21 @@ const fingerprintSchema = new mongoose.Schema({
   toObject: { virtuals: true },
 });
 
+// إعداد الفهرسة لضمان التفرد وتحسين الأداء
 fingerprintSchema.index({ code: 1, date: 1 }, { unique: true });
 fingerprintSchema.index({ date: -1, code: 1 });
 
+// دالة للتحقق من الأيام الأسبوعية
 const isWeeklyLeaveDay = (date, workDaysPerWeek) => {
   const dayOfWeek = DateTime.fromJSDate(date, { zone: 'Africa/Cairo' }).weekday;
   return (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
          (workDaysPerWeek === 6 && dayOfWeek === 5);
 };
 
+// التحقق قبل الحفظ
 fingerprintSchema.pre('save', async function (next) {
   try {
+    // التحقق من وجود سجل آخر بنفس الكود والتاريخ
     if (this.isNew || this.isModified('code') || this.isModified('date')) {
       const existing = await this.constructor.findOne({
         code: this.code,
@@ -114,12 +118,15 @@ fingerprintSchema.pre('save', async function (next) {
           $gte: DateTime.fromJSDate(this.date).startOf('day').toJSDate(),
           $lte: DateTime.fromJSDate(this.date).endOf('day').toJSDate(),
         },
+        _id: { $ne: this._id }, // استثناء السجل الحالي
       });
-      if (existing && (existing.annualLeave || existing.medicalLeave || existing.officialLeave || existing.leaveCompensation > 0) && (this.annualLeave || this.medicalLeave || this.officialLeave || this.leaveCompensation > 0)) {
+      if (existing && (existing.annualLeave || existing.medicalLeave || existing.officialLeave || existing.leaveCompensation > 0) && 
+          (this.annualLeave || this.medicalLeave || this.officialLeave || this.leaveCompensation > 0)) {
         throw new Error(`يوم ${DateTime.fromJSDate(this.date).toISODate()} لـ ${this.code} مسجل مسبقًا بحالة إجازة أخرى`);
       }
     }
 
+    // تحديث بيانات الموظف
     if (this.isNew || this.isModified('code')) {
       const user = await User.findOne({ code: this.code });
       if (!user) {
@@ -133,6 +140,7 @@ fingerprintSchema.pre('save', async function (next) {
       console.log(`Updated employee details for fingerprint ${this.code} on ${DateTime.fromJSDate(this.date).toISODate()}: employeeName=${this.employeeName}, workDaysPerWeek=${this.workDaysPerWeek}, customAnnualLeave=${this.customAnnualLeave}, annualLeaveBalance=${this.annualLeaveBalance}, advances=${this.advances}`);
     }
 
+    // التحقق من رصيد الإجازة السنوية
     if (this.isModified('annualLeave') && this.annualLeave) {
       const user = await User.findOne({ code: this.code });
       if (!user) {
@@ -144,6 +152,7 @@ fingerprintSchema.pre('save', async function (next) {
       console.log(`Annual leave requested for ${this.code} on ${DateTime.fromJSDate(this.date).toISODate()}: annualLeaveBalance=${user.annualLeaveBalance}`);
     }
 
+    // تسجيل التغييرات في الحالات
     if (this.isModified('absence')) {
       console.log(`Absence changed for ${this.code} on ${DateTime.fromJSDate(this.date).toISODate()}: ${this.absence}`);
     }
@@ -169,7 +178,8 @@ fingerprintSchema.pre('save', async function (next) {
   }
 });
 
-fingerprintSchema.pre('remove', async function (next) {
+// قبل الحذف
+fingerprintSchema.pre('deleteOne', { document: true, query: false }, async function (next) {
   try {
     if (this.annualLeave) {
       const user = await User.findOne({ code: this.code });
@@ -181,11 +191,12 @@ fingerprintSchema.pre('remove', async function (next) {
     }
     next();
   } catch (err) {
-    console.error(`Error in pre-remove middleware for ${this.code}:`, err.message);
+    console.error(`Error in pre-deleteOne middleware for ${this.code}:`, err.message);
     next(err);
   }
 });
 
+// الاحتفاظ بقيمة annualLeave السابقة
 fingerprintSchema.pre('save', async function (next) {
   if (!this.isNew && this.isModified('annualLeave')) {
     const prevDoc = await this.constructor.findOne({ _id: this._id });
@@ -194,6 +205,7 @@ fingerprintSchema.pre('save', async function (next) {
   next();
 });
 
+// حساب الحضور
 fingerprintSchema.methods.calculateAttendance = async function () {
   console.log(`Calculating attendance for ${this.code} on ${DateTime.fromJSDate(this.date).toISODate()}`);
   const now = DateTime.now().setZone('Africa/Cairo');
@@ -216,6 +228,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
   this.customAnnualLeave = user.customAnnualLeave || 0;
   this.advances = user.advances || 0;
 
+  // بدل الإجازة
   if (this.leaveCompensation > 0) {
     this.workHours = 0;
     this.overtime = 0;
@@ -233,6 +246,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     return;
   }
 
+  // الإجازة الرسمية
   if (this.officialLeave) {
     this.workHours = 0;
     this.overtime = 0;
@@ -252,13 +266,14 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     return;
   }
 
+  // الإجازة الطبية
   if (this.medicalLeave) {
     this.workHours = 0;
     this.overtime = 0;
     this.lateMinutes = 0;
     this.lateDeduction = 0;
     this.earlyLeaveDeduction = 0;
-    this.medicalLeaveDeduction = 0.25;
+    this.medicalLeaveDeduction = 0.25; // خصم ربع يوم للإجازة الطبية
     this.absence = false;
     this.annualLeave = false;
     this.officialLeave = false;
@@ -269,6 +284,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     return;
   }
 
+  // الإجازة السنوية
   if (this.annualLeave) {
     if (user.annualLeaveBalance <= 0) {
       throw new Error(`رصيد الإجازة السنوية غير كافٍ لـ ${this.code}`);
@@ -296,6 +312,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     return;
   }
 
+  // إعادة رصيد الإجازة السنوية إذا تم إلغاء الإجازة
   if (this.isModified('annualLeave') && !this.annualLeave && this._previousAnnualLeave === true) {
     user.annualLeaveBalance = (user.annualLeaveBalance || 21) + 1;
     await user.save();
@@ -303,6 +320,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     this.annualLeaveBalance = user.annualLeaveBalance || 21;
   }
 
+  // الأيام الأسبوعية
   if (isWeeklyLeaveDay(this.date, this.workDaysPerWeek)) {
     this.workHours = 0;
     this.overtime = 0;
@@ -321,6 +339,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     return;
   }
 
+  // الغياب
   if (!this.checkIn && !this.checkOut) {
     this.workHours = 0;
     this.overtime = 0;
@@ -339,6 +358,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     return;
   }
 
+  // بصمة واحدة
   this.isSingleFingerprint = !(this.checkIn && this.checkOut);
   if (this.isSingleFingerprint) {
     this.workHours = 9;
@@ -357,6 +377,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
     return;
   }
 
+  // حساب ساعات العمل
   if (this.checkIn && this.checkOut) {
     const checkIn = DateTime.fromJSDate(this.checkIn, { zone: 'Africa/Cairo' });
     const checkOut = DateTime.fromJSDate(this.checkOut, { zone: 'Africa/Cairo' });

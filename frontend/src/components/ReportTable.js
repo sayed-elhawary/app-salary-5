@@ -37,6 +37,10 @@ const ReportTable = ({ reports, onEdit }) => {
     );
   }
 
+  // التحقق من عدد أكواد المستخدمين المختلفة
+  const uniqueCodes = [...new Set(validReports.map(report => report.code))];
+  const isSingleUser = uniqueCodes.length === 1;
+
   // حساب التقارير للصفحة الحالية
   const indexOfLastReport = currentPage * reportsPerPage;
   const indexOfFirstReport = indexOfLastReport - reportsPerPage;
@@ -94,55 +98,58 @@ const ReportTable = ({ reports, onEdit }) => {
     }
   };
 
-  // حساب الإجماليات
-  const totals = validReports.reduce(
-    (acc, report) => {
-      try {
-        acc.totalWorkHours += Number(report.workHours) || 0;
-        acc.totalWorkDays += report.absence === 'لا' &&
-                             (Number(report.weeklyLeaveDays) || 0) === 0 &&
-                             report.annualLeave === 'لا' &&
-                             report.medicalLeave === 'لا' &&
-                             report.officialLeave === 'لا' &&
-                             (Number(report.leaveCompensation) || 0) === 0 ? 1 : 0;
-        acc.totalAbsenceDays += report.absence === 'نعم' ? 1 : 0;
-        acc.totalLateDays += (Number(report.lateDeduction) || 0) > 0 ? 1 : 0;
-        acc.totalDeductions += (Number(report.lateDeduction) || 0) +
-                              (Number(report.earlyLeaveDeduction) || 0) +
-                              (Number(report.medicalLeaveDeduction) || 0);
-        acc.totalOvertime += Number(report.overtime) || 0;
-        acc.totalWeeklyLeaveDays += Number(report.weeklyLeaveDays) || 0;
-        acc.totalAnnualLeaveDays += report.annualLeave === 'نعم' ? 1 : 0;
-        acc.totalMedicalLeaveDays += report.medicalLeave === 'نعم' ? 1 : 0;
-        acc.totalOfficialLeaveDays += report.officialLeave === 'نعم' ? 1 : 0;
-        acc.totalLeaveCompensationDays += (Number(report.leaveCompensation) || 0) > 0 ? 1 : 0;
-        acc.totalLeaveCompensationValue += Number(report.leaveCompensation) || 0;
-        acc.totalAnnualLeaveBalance += Number(report.annualLeaveBalance) || 0;
-      } catch (error) {
-        console.warn('Error processing report for totals:', error, 'Report:', report);
-      }
-      return acc;
-    },
-    {
-      totalWorkHours: 0,
-      totalWorkDays: 0,
-      totalAbsenceDays: 0,
-      totalLateDays: 0,
-      totalDeductions: 0,
-      totalOvertime: 0,
-      totalWeeklyLeaveDays: 0,
-      totalAnnualLeaveDays: 0,
-      totalMedicalLeaveDays: 0,
-      totalOfficialLeaveDays: 0,
-      totalLeaveCompensationDays: 0,
-      totalLeaveCompensationValue: 0,
-      totalAnnualLeaveBalance: 0,
-    }
-  );
+  // حساب الإجماليات (فقط إذا كان البحث لمستخدم واحد)
+  const totals = isSingleUser
+    ? validReports.reduce(
+        (acc, report) => {
+          try {
+            acc.totalWorkHours += Number(report.workHours) || 0;
+            acc.totalWorkDays += report.absence === 'لا' &&
+                                 (Number(report.weeklyLeaveDays) || 0) === 0 &&
+                                 report.annualLeave === 'لا' &&
+                                 report.medicalLeave === 'لا' &&
+                                 report.officialLeave === 'لا' &&
+                                 (Number(report.leaveCompensation) || 0) === 0 ? 1 : 0;
+            acc.totalAbsenceDays += report.absence === 'نعم' ? 1 : 0;
+            acc.totalLateDays += (Number(report.lateDeduction) || 0) > 0 ? 1 : 0;
+            acc.totalDeductions += (Number(report.lateDeduction) || 0) +
+                                  (Number(report.earlyLeaveDeduction) || 0) +
+                                  (Number(report.medicalLeaveDeduction) || 0);
+            acc.totalOvertime += Number(report.overtime) || 0;
+            acc.totalWeeklyLeaveDays += Number(report.weeklyLeaveDays) || 0;
+            acc.totalAnnualLeaveDays += report.annualLeave === 'نعم' ? 1 : 0;
+            acc.totalMedicalLeaveDays += report.medicalLeave === 'نعم' ? 1 : 0;
+            acc.totalOfficialLeaveDays += report.officialLeave === 'نعم' ? 1 : 0;
+            acc.totalLeaveCompensationDays += (Number(report.leaveCompensation) || 0) > 0 ? 1 : 0;
+            acc.totalLeaveCompensationValue += Number(report.leaveCompensation) || 0;
+            // استخدام آخر قيمة متاحة لرصيد الإجازات السنوية
+            acc.totalAnnualLeaveBalance = Number(report.annualLeaveBalance) || 0;
+          } catch (error) {
+            console.warn('Error processing report for totals:', error, 'Report:', report);
+          }
+          return acc;
+        },
+        {
+          totalWorkHours: 0,
+          totalWorkDays: 0,
+          totalAbsenceDays: 0,
+          totalLateDays: 0,
+          totalDeductions: 0,
+          totalOvertime: 0,
+          totalWeeklyLeaveDays: 0,
+          totalAnnualLeaveDays: 0,
+          totalMedicalLeaveDays: 0,
+          totalOfficialLeaveDays: 0,
+          totalLeaveCompensationDays: 0,
+          totalLeaveCompensationValue: 0,
+          totalAnnualLeaveBalance: 0,
+        }
+      )
+    : null;
 
   return (
-    <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100">
-      <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">التقارير</h2>
+    <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-200">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">التقارير</h2>
       {validReports.length === 0 ? (
         <div className="text-right p-4 text-gray-600 text-sm sm:text-base">
           لا توجد تقارير للعرض
@@ -214,8 +221,7 @@ const ReportTable = ({ reports, onEdit }) => {
                       </td>
                       <td className="px-2 sm:px-4 py-2 text-right text-xs sm:text-sm">{(Number(report.workHours) || 0).toFixed(2)}</td>
                       <td className="px-2 sm:px-4 py-2 text-right text-xs sm:text-sm">{(Number(report.overtime) || 0).toFixed(2)}</td>
-	              <td className="px-2 sm:px-4 py-2 text-right text-xs sm:text-sm">{(Number(report.L_DAY_MINUTES) || 0).toFixed(0)}</td>
-
+                      <td className="px-2 sm:px-4 py-2 text-right text-xs sm:text-sm">{(Number(report.L_DAY_MINUTES) || 0).toFixed(0)}</td>
                       <td className="px-2 sm:px-4 py-2 text-right text-xs sm:text-sm">{(Number(report.lateDeduction) || 0).toFixed(2)}</td>
                       <td className="px-2 sm:px-4 py-2 text-right text-xs sm:text-sm">{(Number(report.earlyLeaveDeduction) || 0).toFixed(2)}</td>
                       <td className="px-2 sm:px-4 py-2 text-right text-xs sm:text-sm">{report.absence || '-'}</td>
@@ -232,7 +238,7 @@ const ReportTable = ({ reports, onEdit }) => {
                           onClick={() => handleEdit(report)}
                           whileHover={{ scale: 1.05, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                           whileTap={{ scale: 0.95 }}
-                          className="w-full sm:w-auto bg-blue-600 text-white px-3 sm:px-4 py-1 sm:py-1 rounded-md hover:bg-blue-700 transition-colors duration-300 text-xs sm:text-sm"
+                          className="w-full sm:w-auto bg-indigo-600 text-white px-3 sm:px-4 py-1 sm:py-1 rounded-md hover:bg-indigo-700 transition-colors duration-300 text-xs sm:text-sm"
                         >
                           تعديل
                         </motion.button>
@@ -252,7 +258,7 @@ const ReportTable = ({ reports, onEdit }) => {
                 disabled={currentPage === 1}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-4 py-2 mx-1 bg-blue-600 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                className="px-4 py-2 mx-1 bg-indigo-600 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
               >
                 السابق
               </motion.button>
@@ -264,71 +270,73 @@ const ReportTable = ({ reports, onEdit }) => {
                 disabled={indexOfLastReport >= validReports.length}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-4 py-2 mx-1 bg-blue-600 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                className="px-4 py-2 mx-1 bg-indigo-600 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
               >
                 التالي
               </motion.button>
             </div>
           )}
 
-          {/* عرض الإجماليات */}
-          <div className="mt-6 text-right">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">إجماليات الفترة</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg shadow-inner">
-              <div className="bg-blue-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي ساعات العمل</p>
-                <p className="text-sm sm:text-lg font-bold text-blue-700">{totals.totalWorkHours.toFixed(2)} ساعة</p>
-              </div>
-              <div className="bg-green-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام العمل</p>
-                <p className="text-sm sm:text-lg font-bold text-green-700">{totals.totalWorkDays} يوم</p>
-              </div>
-              <div className="bg-red-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الغياب</p>
-                <p className="text-sm sm:text-lg font-bold text-red-700">{totals.totalAbsenceDays} يوم</p>
-              </div>
-              <div className="bg-orange-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام التأخير</p>
-                <p className="text-sm sm:text-lg font-bold text-orange-700">{totals.totalLateDays} يوم</p>
-              </div>
-              <div className="bg-yellow-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الخصومات</p>
-                <p className="text-sm sm:text-lg font-bold text-yellow-700">{totals.totalDeductions.toFixed(2)} يوم</p>
-              </div>
-              <div className="bg-purple-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الساعات الإضافية</p>
-                <p className="text-sm sm:text-lg font-bold text-purple-700">{totals.totalOvertime.toFixed(2)} ساعة</p>
-              </div>
-              <div className="bg-indigo-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الأسبوعية</p>
-                <p className="text-sm sm:text-lg font-bold text-indigo-700">{totals.totalWeeklyLeaveDays} يوم</p>
-              </div>
-              <div className="bg-teal-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة السنوية</p>
-                <p className="text-sm sm:text-lg font-bold text-teal-700">{totals.totalAnnualLeaveDays} يوم</p>
-              </div>
-              <div className="bg-pink-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الطبية</p>
-                <p className="text-sm sm:text-lg font-bold text-pink-700">{totals.totalMedicalLeaveDays} يوم</p>
-              </div>
-              <div className="bg-cyan-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الرسمية</p>
-                <p className="text-sm sm:text-lg font-bold text-cyan-700">{totals.totalOfficialLeaveDays} يوم</p>
-              </div>
-              <div className="bg-amber-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام بدل الإجازة</p>
-                <p className="text-sm sm:text-lg font-bold text-amber-700">{totals.totalLeaveCompensationDays} يوم</p>
-              </div>
-              <div className="bg-lime-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي قيمة بدل الإجازة</p>
-                <p className="text-sm sm:text-lg font-bold text-lime-700">{totals.totalLeaveCompensationValue.toFixed(2)} جنيه</p>
-              </div>
-              <div className="bg-gray-100 p-3 sm:p-4 rounded-lg text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">رصيد الإجازات السنوية</p>
-                <p className="text-sm sm:text-lg font-bold text-gray-700">{totals.totalAnnualLeaveBalance.toFixed(2)} يوم</p>
+          {/* عرض الإجماليات (فقط لمستخدم واحد) */}
+          {isSingleUser && totals && (
+            <div className="mt-6 text-right">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">إجماليات الفترة</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg shadow-inner">
+                <div className="bg-blue-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي ساعات العمل</p>
+                  <p className="text-sm sm:text-lg font-bold text-blue-700">{totals.totalWorkHours.toFixed(2)} ساعة</p>
+                </div>
+                <div className="bg-green-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام العمل</p>
+                  <p className="text-sm sm:text-lg font-bold text-green-700">{totals.totalWorkDays} يوم</p>
+                </div>
+                <div className="bg-red-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الغياب</p>
+                  <p className="text-sm sm:text-lg font-bold text-red-700">{totals.totalAbsenceDays} يوم</p>
+                </div>
+                <div className="bg-orange-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام التأخير</p>
+                  <p className="text-sm sm:text-lg font-bold text-orange-700">{totals.totalLateDays} يوم</p>
+                </div>
+                <div className="bg-yellow-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الخصومات</p>
+                  <p className="text-sm sm:text-lg font-bold text-yellow-700">{totals.totalDeductions.toFixed(2)} يوم</p>
+                </div>
+                <div className="bg-purple-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الساعات الإضافية</p>
+                  <p className="text-sm sm:text-lg font-bold text-purple-700">{totals.totalOvertime.toFixed(2)} ساعة</p>
+                </div>
+                <div className="bg-indigo-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الأسبوعية</p>
+                  <p className="text-sm sm:text-lg font-bold text-indigo-700">{totals.totalWeeklyLeaveDays} يوم</p>
+                </div>
+                <div className="bg-teal-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة السنوية</p>
+                  <p className="text-sm sm:text-lg font-bold text-teal-700">{totals.totalAnnualLeaveDays} يوم</p>
+                </div>
+                <div className="bg-pink-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الطبية</p>
+                  <p className="text-sm sm:text-lg font-bold text-pink-700">{totals.totalMedicalLeaveDays} يوم</p>
+                </div>
+                <div className="bg-cyan-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الرسمية</p>
+                  <p className="text-sm sm:text-lg font-bold text-cyan-700">{totals.totalOfficialLeaveDays} يوم</p>
+                </div>
+                <div className="bg-amber-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام بدل الإجازة</p>
+                  <p className="text-sm sm:text-lg font-bold text-amber-700">{totals.totalLeaveCompensationDays} يوم</p>
+                </div>
+                <div className="bg-lime-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي قيمة بدل الإجازة</p>
+                  <p className="text-sm sm:text-lg font-bold text-lime-700">{totals.totalLeaveCompensationValue.toFixed(2)} جنيه</p>
+                </div>
+                <div className="bg-gray-100 p-3 sm:p-4 rounded-lg text-right">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">رصيد الإجازات السنوية</p>
+                  <p className="text-sm sm:text-lg font-bold text-gray-700">{totals.totalAnnualLeaveBalance.toFixed(2)} يوم</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* نافذة التعديل */}
           <EditModal
