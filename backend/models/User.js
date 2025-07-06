@@ -87,10 +87,14 @@ const userSchema = new mongoose.Schema(
       default: 21,
       min: [0, 'رصيد الإجازة السنوية يجب ألا يكون سالبًا'],
     },
-    totalAnnualLeave: {
+    customAnnualLeave: {
       type: Number,
       default: 0,
-      min: [0, 'إجمالي أيام الإجازة السنوية يجب ألا يكون سالبًا'],
+      min: [0, 'الإجازة السنوية المخصصة يجب ألا تكون سالبة'],
+    },
+    lastAnnualLeaveResetDate: {
+      type: Date,
+      default: () => DateTime.now().setZone('Africa/Cairo').startOf('year').toJSDate(),
     },
     monthlyLateAllowance: {
       type: Number,
@@ -148,6 +152,7 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ code: 1 });
+userSchema.index({ fullName: 1 });
 
 userSchema.pre('save', async function (next) {
   try {
@@ -155,6 +160,27 @@ userSchema.pre('save', async function (next) {
       const salt = await bcrypt.genSalt(10);
       this.password = await bcrypt.hash(this.password, salt);
       console.log(`Password hashed for user: ${this.code}`);
+    }
+
+    const now = DateTime.now().setZone('Africa/Cairo');
+    const lastReset = this.lastResetDate
+      ? DateTime.fromJSDate(this.lastResetDate, { zone: 'Africa/Cairo' })
+      : now;
+    const lastAnnualReset = this.lastAnnualLeaveResetDate
+      ? DateTime.fromJSDate(this.lastAnnualLeaveResetDate, { zone: 'Africa/Cairo' })
+      : now;
+
+    if (now.year !== lastAnnualReset.year) {
+      this.customAnnualLeave = Math.min(this.annualLeaveBalance || 21, 7);
+      this.annualLeaveBalance = 21;
+      this.lastAnnualLeaveResetDate = now.startOf('year').toJSDate();
+      console.log(`Reset annualLeaveBalance to 21 and set customAnnualLeave to ${this.customAnnualLeave} for user ${this.code} on ${this.lastAnnualLeaveResetDate}`);
+    }
+
+    if (now.month !== lastReset.month || now.year !== lastReset.year) {
+      this.monthlyLateAllowance = 120;
+      this.lastResetDate = now.startOf('month').toJSDate();
+      console.log(`Reset monthlyLateAllowance for user ${this.code} to 120 on ${this.lastResetDate}`);
     }
 
     if (this.isModified('violationsInstallment')) {
@@ -169,19 +195,12 @@ userSchema.pre('save', async function (next) {
       console.log(`Updating totalOfficialLeaveDays for user ${this.code}: Previous=${this.get('totalOfficialLeaveDays', null, { getters: false })}, New=${this.totalOfficialLeaveDays}`);
     }
 
-    if (this.isModified('totalAnnualLeave') || this.isModified('annualLeaveBalance')) {
-      console.log(`Updating leave for user ${this.code}: totalAnnualLeave=${this.totalAnnualLeave}, annualLeaveBalance=${this.annualLeaveBalance}`);
+    if (this.isModified('annualLeaveBalance')) {
+      console.log(`Updating leave for user ${this.code}: annualLeaveBalance=${this.annualLeaveBalance}`);
     }
 
-    const now = DateTime.now().setZone('Africa/Cairo');
-    const lastReset = this.lastResetDate
-      ? DateTime.fromJSDate(this.lastResetDate, { zone: 'Africa/Cairo' })
-      : now;
-
-    if (now.month !== lastReset.month || now.year !== lastReset.year) {
-      this.monthlyLateAllowance = 120;
-      this.lastResetDate = now.startOf('month').toJSDate();
-      console.log(`Reset monthlyLateAllowance for user ${this.code} to 120 on ${this.lastResetDate}`);
+    if (this.isModified('customAnnualLeave')) {
+      console.log(`Updating customAnnualLeave for user ${this.code}: Previous=${this.get('customAnnualLeave', null, { getters: false })}, New=${this.customAnnualLeave}`);
     }
 
     next();
@@ -211,7 +230,7 @@ userSchema.virtual('netSalary').get(async function () {
                           !report.annualLeave &&
                           !report.medicalLeave &&
                           !report.officialLeave &&
-                          !report.leaveCompensation &&
+                          report.leaveCompensation === 0 &&
                           !isWeeklyLeaveDay(report.date, this.workDaysPerWeek);
         acc.totalWorkHours += report.workHours || 0;
         acc.totalWorkDays += isWorkDay ? 1 : 0;
@@ -224,7 +243,8 @@ userSchema.virtual('netSalary').get(async function () {
         acc.totalAnnualLeaveDays += report.annualLeave ? 1 : 0;
         acc.totalMedicalLeaveDays += report.medicalLeave ? 1 : 0;
         acc.totalOfficialLeaveDays += report.officialLeave ? 1 : 0;
-        acc.totalLeaveCompensationDays += report.leaveCompensation ? 1 : 0;
+        acc.totalLeaveCompensationDays += report.leaveCompensation > 0 ? 1 : 0;
+        acc.totalLeaveCompensationValue += report.leaveCompensation || 0;
         return acc;
       },
       {
@@ -240,6 +260,7 @@ userSchema.virtual('netSalary').get(async function () {
         totalMedicalLeaveDays: 0,
         totalOfficialLeaveDays: 0,
         totalLeaveCompensationDays: 0,
+        totalLeaveCompensationValue: 0,
       }
     );
 
@@ -249,7 +270,6 @@ userSchema.virtual('netSalary').get(async function () {
     const baseMealAllowance = this.mealAllowance;
     const mealAllowance = baseMealAllowance - (totals.totalAbsenceDays + totals.totalAnnualLeaveDays + totals.totalMedicalLeaveDays + totals.totalOfficialLeaveDays) * 50;
     const bonus = this.baseBonus * (this.bonusPercentage / 100);
-    const leaveCompensationValue = totals.totalLeaveCompensationDays * dailySalary * 2;
     const deductionsValue = (totals.totalAbsenceDays + totals.lateDeductionDays + totals.earlyLeaveDeductionDays + totals.medicalLeaveDeductionDays) * dailySalary + this.penaltiesValue + this.violationsInstallment + this.advances;
 
     const netSalary = (
@@ -258,13 +278,13 @@ userSchema.virtual('netSalary').get(async function () {
       overtimeValue +
       bonus +
       this.eidBonus +
-      leaveCompensationValue -
+      totals.totalLeaveCompensationValue -
       this.medicalInsurance -
       this.socialInsurance -
       deductionsValue
     ).toFixed(2);
 
-    console.log(`Calculated netSalary for ${this.code}: ${netSalary}, deductionsValue: ${deductionsValue}, violationsInstallment: ${this.violationsInstallment}, advances: ${this.advances}, leaveCompensationValue: ${leaveCompensationValue}`);
+    console.log(`Calculated netSalary for ${this.code}: ${netSalary}, deductionsValue: ${deductionsValue}, violationsInstallment: ${this.violationsInstallment}, advances: ${this.advances}, leaveCompensationValue: ${totals.totalLeaveCompensationValue}`);
     return {
       netSalary: parseFloat(netSalary),
       employeeName: this.fullName,

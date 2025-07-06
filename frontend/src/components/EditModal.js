@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { DateTime } from 'luxon';
 import { motion } from 'framer-motion';
+import { toast } from 'react-toastify';
 
 const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
   const [checkIn, setCheckIn] = useState('');
@@ -16,26 +16,34 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
 
   useEffect(() => {
     if (report) {
-      setCheckIn(report.checkIn || '');
-      setCheckOut(report.checkOut || '');
+      setCheckIn(report.checkIn ? report.checkIn.slice(11, 16) : '');
+      setCheckOut(report.checkOut ? report.checkOut.slice(11, 16) : '');
       setAbsence(report.absence === 'نعم');
       setAnnualLeave(report.annualLeave === 'نعم');
       setMedicalLeave(report.medicalLeave === 'نعم');
       setOfficialLeave(report.officialLeave === 'نعم');
-      setLeaveCompensation(report.leaveCompensation === 'نعم');
+      setLeaveCompensation(report.leaveCompensation && report.leaveCompensation !== 'لا' && parseFloat(report.leaveCompensation) > 0);
       setError('');
     }
   }, [report]);
 
+  useEffect(() => {
+    if (annualLeave) {
+      setCheckIn('');
+      setCheckOut('');
+    }
+  }, [annualLeave]);
+
   if (!isOpen || !report) return null;
 
-  const handleCheckboxChange = (setter, value) => {
-    setAbsence(false);
-    setAnnualLeave(false);
-    setMedicalLeave(false);
-    setOfficialLeave(false);
-    setLeaveCompensation(false);
-    setter(value);
+  const handleCheckboxChange = (field) => (e) => {
+    const value = e.target.checked;
+    // تحديث الحالات مع التأكد من أن الحالة المحددة فقط تتغير
+    setAbsence(field === 'absence' ? value : false);
+    setAnnualLeave(field === 'annualLeave' ? value : false);
+    setMedicalLeave(field === 'medicalLeave' ? value : false);
+    setOfficialLeave(field === 'officialLeave' ? value : false);
+    setLeaveCompensation(field === 'leaveCompensation' ? value : false);
   };
 
   const handleSubmit = async (e) => {
@@ -43,15 +51,17 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
     setError('');
     setLoading(true);
 
-    const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
-    if ((checkIn && !timeRegex.test(checkIn)) || (checkOut && !timeRegex.test(checkOut))) {
-      setError('تنسيق الوقت غير صالح، يجب أن يكون HH:mm:ss');
+    const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/;
+    if (!annualLeave && ((checkIn && !timeRegex.test(checkIn)) || (checkOut && !timeRegex.test(checkOut)))) {
+      setError('تنسيق الوقت غير صالح، يجب أن يكون HH:mm أو HH:mm:ss');
+      toast.error('تنسيق الوقت غير صالح');
       setLoading(false);
       return;
     }
 
     if ([absence, annualLeave, medicalLeave, officialLeave, leaveCompensation].filter(Boolean).length > 1) {
-      setError('لا يمكن تحديد أكثر من حالة واحدة (غياب، إجازة سنوية، إجازة طبية، إجازة رسمية، بدل إجازة) معًا');
+      setError('لا يمكن تحديد أكثر من حالة واحدة (غياب، إجازة سنوية، إجازة طبية، إجازة رسمية، بدل إجازة)');
+      toast.error('لا يمكن تحديد أكثر من حالة واحدة');
       setLoading(false);
       return;
     }
@@ -62,29 +72,36 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
         throw new Error('التوكن غير موجود، يرجى تسجيل الدخول');
       }
 
+      const payload = {
+        code: report.code,
+        date: report.date,
+        checkIn: annualLeave ? null : (checkIn || null),
+        checkOut: annualLeave ? null : (checkOut || null),
+        absence,
+        annualLeave,
+        medicalLeave,
+        officialLeave,
+        leaveCompensation,
+      };
+      console.log('Submitting payload:', payload);
+
       const response = await axios.put(
         `${process.env.REACT_APP_API_URL}/api/fingerprints/${report._id}`,
-        {
-          code: report.code,
-          date: report.date,
-          checkIn: checkIn || null,
-          checkOut: checkOut || null,
-          absence,
-          annualLeave,
-          medicalLeave,
-          officialLeave,
-          leaveCompensation,
-        },
+        payload,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
+      console.log('Update response:', response.data);
       onUpdate(response.data.report);
+      toast.success('تم حفظ التعديلات بنجاح');
       onClose();
     } catch (err) {
-      console.error('Error saving report:', err);
-      setError(err.response?.data?.error || 'خطأ في حفظ التعديلات');
+      console.error('Error saving report:', err.response?.data || err.message);
+      const errorMsg = err.response?.data?.error || 'خطأ في حفظ التعديلات';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -155,7 +172,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
                 onChange={(e) => setCheckIn(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-right text-sm"
                 step="1"
-                disabled={loading}
+                disabled={loading || annualLeave}
               />
             </div>
             <div>
@@ -166,7 +183,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
                 onChange={(e) => setCheckOut(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-right text-sm"
                 step="1"
-                disabled={loading}
+                disabled={loading || annualLeave}
               />
             </div>
           </div>
@@ -176,7 +193,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
               <input
                 type="checkbox"
                 checked={absence}
-                onChange={(e) => handleCheckboxChange(setAbsence, e.target.checked)}
+                onChange={handleCheckboxChange('absence')}
                 className="h-4 w-4"
                 disabled={loading}
               />
@@ -186,7 +203,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
               <input
                 type="checkbox"
                 checked={annualLeave}
-                onChange={(e) => handleCheckboxChange(setAnnualLeave, e.target.checked)}
+                onChange={handleCheckboxChange('annualLeave')}
                 className="h-4 w-4"
                 disabled={loading}
               />
@@ -196,7 +213,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
               <input
                 type="checkbox"
                 checked={medicalLeave}
-                onChange={(e) => handleCheckboxChange(setMedicalLeave, e.target.checked)}
+                onChange={handleCheckboxChange('medicalLeave')}
                 className="h-4 w-4"
                 disabled={loading}
               />
@@ -206,17 +223,17 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
               <input
                 type="checkbox"
                 checked={officialLeave}
-                onChange={(e) => handleCheckboxChange(setOfficialLeave, e.target.checked)}
+                onChange={handleCheckboxChange('officialLeave')}
                 className="h-4 w-4"
                 disabled={loading}
               />
             </div>
             <div className="flex items-center justify-end">
-              <label className="text-gray-700 text-sm font-medium mr-2">بدل إجازة</label>
+              <label className="text-gray-700 text-sm font-medium mr-2">بدل الإجازة</label>
               <input
                 type="checkbox"
                 checked={leaveCompensation}
-                onChange={(e) => handleCheckboxChange(setLeaveCompensation, e.target.checked)}
+                onChange={handleCheckboxChange('leaveCompensation')}
                 className="h-4 w-4"
                 disabled={loading}
               />

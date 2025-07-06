@@ -1,38 +1,81 @@
-
 import { Link, useNavigate } from 'react-router-dom';
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { AuthContext } from './AuthProvider';
-import { HomeIcon, UserPlusIcon, UploadIcon, LogOutIcon, FileTextIcon, DollarSignIcon } from 'lucide-react';
+import { HomeIcon, UserPlusIcon, UploadIcon, LogOutIcon, DollarSignIcon, SettingsIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
+import axios from 'axios';
 
 const Navbar = () => {
-  const { user } = useContext(AuthContext);
+  const { user, setUser, loading } = useContext(AuthContext);
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState(null);
 
-  // دالة تسجيل الخروج
+  useEffect(() => {
+    if (!loading && !user) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        axios
+          .get(`${process.env.REACT_APP_API_URL}/api/users/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          .then((response) => {
+            setUser(response.data.user);
+          })
+          .catch((err) => {
+            console.error('Error fetching user:', err.message);
+            setError('فشل تحميل بيانات المستخدم');
+            localStorage.removeItem('token');
+            navigate('/login');
+          });
+      }
+    }
+  }, [loading, user, setUser, navigate]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
+    setUser(null);
     navigate('/login');
-    setIsOpen(false); // إغلاق القائمة المنسدلة بعد الخروج
+    setIsOpen(false);
   };
 
+  if (loading) {
+    return (
+      <div className="bg-white shadow-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <p className="text-gray-600 text-right">جارٍ التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white shadow-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <p className="text-red-600 text-right">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <nav className="bg-gradient-to-r from-gray-900 to-blue-900 shadow-lg sticky top-0 z-50">
-      {/* الحاوية الرئيسية */}
+    <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* الشعار والعنوان */}
           <div className="flex items-center">
-            <Link to="/dashboard" className="flex items-center space-x-2 text-white text-2xl font-bold hover:text-yellow-400 transition-all duration-300">
+            <Link
+              to="/dashboard"
+              className="flex items-center space-x-2 text-blue-600 text-2xl font-bold hover:text-blue-800 transition-all duration-300"
+            >
               <HomeIcon className="h-6 w-6" />
               <span>نظام الحضور</span>
             </Link>
           </div>
-          {/* روابط الشاشات الكبيرة */}
-          <div className="hidden sm:flex sm:items-center sm:space-x-6">
+          <div className="hidden sm:flex sm:items-center sm:space-x-4">
             <Link
               to="/dashboard"
-              className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
             >
               <HomeIcon className="h-5 w-5" />
               <span>الرئيسية</span>
@@ -41,21 +84,21 @@ const Navbar = () => {
               <>
                 <Link
                   to="/create-account"
-                  className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
                 >
                   <UserPlusIcon className="h-5 w-5" />
                   <span>إنشاء حساب</span>
                 </Link>
                 <Link
-                  to="/reports"
-                  className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                  to="/users/settings"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
                 >
-                  <FileTextIcon className="h-5 w-5" />
-                  <span>تقرير الحضور</span>
+                  <SettingsIcon className="h-5 w-5" />
+                  <span>إعدادات المستخدم</span>
                 </Link>
                 <Link
                   to="/monthly-salary-report"
-                  className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
                 >
                   <DollarSignIcon className="h-5 w-5" />
                   <span>تقرير المرتب الشهري</span>
@@ -64,34 +107,32 @@ const Navbar = () => {
             )}
             <Link
               to="/upload-fingerprint"
-              className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
             >
               <UploadIcon className="h-5 w-5" />
               <span>رفع بصمة</span>
             </Link>
-            {user && (
+            {user ? (
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 text-white hover:text-white hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                className="flex items-center space-x-2 text-white bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
               >
                 <LogOutIcon className="h-5 w-5" />
                 <span>تسجيل الخروج</span>
               </button>
-            )}
-            {!user && (
+            ) : (
               <Link
                 to="/login"
-                className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
               >
                 <span>تسجيل الدخول</span>
               </Link>
             )}
           </div>
-          {/* زر القائمة المنسدلة للشاشات الصغيرة */}
           <div className="flex items-center sm:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-lg text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-all duration-300"
+              className="inline-flex items-center justify-center p-2 rounded-lg text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
               aria-label="Toggle menu"
             >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -105,13 +146,17 @@ const Navbar = () => {
           </div>
         </div>
       </div>
-      {/* القائمة المنسدلة للشاشات الصغيرة */}
       {isOpen && (
-        <div className="sm:hidden bg-blue-950 animate-slideIn">
+        <motion.div
+          className="sm:hidden bg-gray-50"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+        >
           <div className="pt-2 pb-4 space-y-2 px-4">
             <Link
               to="/dashboard"
-              className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
               onClick={() => setIsOpen(false)}
             >
               <HomeIcon className="h-5 w-5" />
@@ -121,23 +166,23 @@ const Navbar = () => {
               <>
                 <Link
                   to="/create-account"
-                  className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
                   onClick={() => setIsOpen(false)}
                 >
                   <UserPlusIcon className="h-5 w-5" />
                   <span>إنشاء حساب</span>
                 </Link>
                 <Link
-                  to="/reports"
-                  className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                  to="/users/settings"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
                   onClick={() => setIsOpen(false)}
                 >
-                  <FileTextIcon className="h-5 w-5" />
-                  <span>تقرير الحضور</span>
+                  <SettingsIcon className="h-5 w-5" />
+                  <span>إعدادات المستخدم</span>
                 </Link>
                 <Link
                   to="/monthly-salary-report"
-                  className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
                   onClick={() => setIsOpen(false)}
                 >
                   <DollarSignIcon className="h-5 w-5" />
@@ -147,32 +192,31 @@ const Navbar = () => {
             )}
             <Link
               to="/upload-fingerprint"
-              className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
               onClick={() => setIsOpen(false)}
             >
               <UploadIcon className="h-5 w-5" />
               <span>رفع بصمة</span>
             </Link>
-            {user && (
+            {user ? (
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 text-white hover:text-white hover:bg-red-600 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300 w-full text-right"
+                className="flex items-center space-x-2 text-white bg-red-500 hover:bg-red-600 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300 w-full text-right"
               >
                 <LogOutIcon className="h-5 w-5" />
                 <span>تسجيل الخروج</span>
               </button>
-            )}
-            {!user && (
+            ) : (
               <Link
                 to="/login"
-                className="flex items-center space-x-2 text-white hover:text-yellow-400 hover:bg-blue-800 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
                 onClick={() => setIsOpen(false)}
               >
                 <span>تسجيل الدخول</span>
               </Link>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
     </nav>
   );

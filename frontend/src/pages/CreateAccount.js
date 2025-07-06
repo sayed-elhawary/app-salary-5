@@ -21,6 +21,15 @@ const CreateAccount = () => {
     socialInsurance: 0,
     workDaysPerWeek: 5,
     status: 'active',
+    annualLeaveBalance: 21,
+    eidBonus: 0,
+    penaltiesValue: 0,
+    violationsInstallment: 0,
+    totalViolationsValue: 0,
+    advances: 0,
+    totalOfficialLeaveDays: 0,
+    monthlyLateAllowance: 120,
+    customAnnualLeave: 0,
   });
 
   const netSalary =
@@ -28,7 +37,11 @@ const CreateAccount = () => {
     Number(form.baseBonus || 0) * (Number(form.bonusPercentage || 0) / 100) +
     Number(form.mealAllowance || 0) -
     Number(form.medicalInsurance || 0) -
-    Number(form.socialInsurance || 0);
+    Number(form.socialInsurance || 0) -
+    Number(form.penaltiesValue || 0) -
+    Number(form.violationsInstallment || 0) -
+    Number(form.advances || 0) +
+    Number(form.eidBonus || 0);
 
   if (!user || user.role !== 'admin') {
     navigate('/login');
@@ -113,6 +126,7 @@ const CreateAccount = () => {
                   onChange={(e) => setForm({ ...form, baseSalary: e.target.value })}
                   className="w-full p-2 border rounded"
                   required
+                  min={0}
                 />
               </div>
               <div>
@@ -122,6 +136,7 @@ const CreateAccount = () => {
                   value={form.baseBonus}
                   onChange={(e) => setForm({ ...form, baseBonus: e.target.value })}
                   className="w-full p-2 border rounded"
+                  min={0}
                 />
               </div>
               <div>
@@ -132,6 +147,8 @@ const CreateAccount = () => {
                   onChange={(e) => setForm({ ...form, bonusPercentage: e.target.value })}
                   className="w-full p-2 border rounded"
                   required
+                  min={0}
+                  max={100}
                 />
               </div>
               <div>
@@ -141,6 +158,7 @@ const CreateAccount = () => {
                   value={form.mealAllowance}
                   onChange={(e) => setForm({ ...form, mealAllowance: e.target.value })}
                   className="w-full p-2 border rounded"
+                  min={0}
                 />
               </div>
               <div>
@@ -150,6 +168,7 @@ const CreateAccount = () => {
                   value={form.medicalInsurance}
                   onChange={(e) => setForm({ ...form, medicalInsurance: e.target.value })}
                   className="w-full p-2 border rounded"
+                  min={0}
                 />
               </div>
               <div>
@@ -159,6 +178,7 @@ const CreateAccount = () => {
                   value={form.socialInsurance}
                   onChange={(e) => setForm({ ...form, socialInsurance: e.target.value })}
                   className="w-full p-2 border rounded"
+                  min={0}
                 />
               </div>
               <div>
@@ -185,6 +205,96 @@ const CreateAccount = () => {
                 </select>
               </div>
               <div>
+                <label className="block text-gray-700 font-medium mb-1">رصيد الإجازة السنوية</label>
+                <input
+                  type="number"
+                  value={form.annualLeaveBalance}
+                  onChange={(e) => setForm({ ...form, annualLeaveBalance: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">الإجازة السنوية المخصصة</label>
+                <input
+                  type="number"
+                  value={form.customAnnualLeave}
+                  onChange={(e) => setForm({ ...form, customAnnualLeave: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">حافز العيد</label>
+                <input
+                  type="number"
+                  value={form.eidBonus}
+                  onChange={(e) => setForm({ ...form, eidBonus: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">قيمة الجزاءات</label>
+                <input
+                  type="number"
+                  value={form.penaltiesValue}
+                  onChange={(e) => setForm({ ...form, penaltiesValue: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">قسط المخالفات</label>
+                <input
+                  type="number"
+                  value={form.violationsInstallment}
+                  onChange={(e) => setForm({ ...form, violationsInstallment: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">إجمالي قيمة المخالفات</label>
+                <input
+                  type="number"
+                  value={form.totalViolationsValue}
+                  onChange={(e) => setForm({ ...form, totalViolationsValue: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">السلف</label>
+                <input
+                  type="number"
+                  value={form.advances}
+                  onChange={(e) => setForm({ ...form, advances: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">إجمالي أيام الإجازة الرسمية</label>
+                <input
+                  type="number"
+                  value={form.totalOfficialLeaveDays}
+                  onChange={(e) => setForm({ ...form, totalOfficialLeaveDays: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">رصيد السماح الشهري (دقائق)</label>
+                <input
+                  type="number"
+                  value={form.monthlyLateAllowance}
+                  onChange={(e) => setForm({ ...form, monthlyLateAllowance: e.target.value })}
+                  className="w-full p-2 border rounded"
+                  min={0}
+                />
+              </div>
+              <div>
                 <label className="block text-gray-700 font-medium mb-1">الراتب الصافي (يُحسب تلقائياً)</label>
                 <input
                   type="number"
@@ -194,7 +304,6 @@ const CreateAccount = () => {
                 />
               </div>
             </div>
-
             <button
               type="submit"
               className="btn-primary w-full py-3 mt-4 text-white bg-blue-600 hover:bg-blue-700 rounded"

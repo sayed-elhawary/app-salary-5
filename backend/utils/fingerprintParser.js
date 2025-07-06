@@ -108,12 +108,15 @@ export const parseFingerprintFile = async (file) => {
         let checkIn = null;
         let checkOut = null;
         let officialLeave = false;
-        let leaveCompensation = false;
+        let leaveCompensation = 0;
+        let isSingleFingerprint = false;
 
         // تحديد officialLeave و leaveCompensation بناءً على أول إدخال في المجموعة
         if (entries.length > 0) {
           officialLeave = entries[0].officialLeave;
-          leaveCompensation = entries[0].leaveCompensation;
+          if (entries[0].leaveCompensation) {
+            leaveCompensation = (user.baseSalary / 30 * 2).toFixed(2);
+          }
         }
 
         // إذا كان هناك إجازة رسمية أو بدل إجازة، لا حاجة لحساب checkIn/checkOut
@@ -128,6 +131,7 @@ export const parseFingerprintFile = async (file) => {
           }
 
           if (filteredEntries.length === 1) {
+            isSingleFingerprint = true;
             const entry = filteredEntries[0];
             if (entry.hour < 12) {
               checkIn = entry.toJSDate();
@@ -140,7 +144,7 @@ export const parseFingerprintFile = async (file) => {
           }
         }
 
-        console.log(`Processing group ${key}: checkIn=${checkIn}, checkOut=${checkOut}, officialLeave=${officialLeave}, leaveCompensation=${leaveCompensation}`);
+        console.log(`Processing group ${key}: checkIn=${checkIn}, checkOut=${checkOut}, officialLeave=${officialLeave}, leaveCompensation=${leaveCompensation}, isSingleFingerprint=${isSingleFingerprint}`);
 
         const existingReport = await Fingerprint.findOne({
           code,
@@ -156,7 +160,7 @@ export const parseFingerprintFile = async (file) => {
             employeeName: user.fullName,
             checkIn,
             checkOut,
-            workHours: 0,
+            workHours: isSingleFingerprint ? 9 : 0,
             overtime: 0,
             lateMinutes: 0,
             lateDeduction: 0,
@@ -167,12 +171,13 @@ export const parseFingerprintFile = async (file) => {
             officialLeave,
             leaveCompensation,
             date: entries[0].dateTime.toJSDate(),
-            workDaysPerWeek: user.workDaysPerWeek || 5,
+            workDaysPerWeek: user.workDaysPerWeek || 6,
+            isSingleFingerprint,
           });
 
           await report.calculateAttendance();
           reports.push(report);
-          console.log(`Created new report for code ${code} on ${dateKey}: employeeName=${user.fullName}, workDaysPerWeek=${report.workDaysPerWeek}, officialLeave=${report.officialLeave}, leaveCompensation=${report.leaveCompensation}`);
+          console.log(`Created new report for code ${code} on ${dateKey}: employeeName=${user.fullName}, workDaysPerWeek=${report.workDaysPerWeek}, officialLeave=${report.officialLeave}, leaveCompensation=${report.leaveCompensation}, isSingleFingerprint=${report.isSingleFingerprint}`);
         } else {
           console.log(`Skipping duplicate report for code ${code} on ${dateKey}`);
         }

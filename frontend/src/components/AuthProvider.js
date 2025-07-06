@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -6,57 +6,94 @@ export const AuthContext = createContext();
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // حالة لتتبع تحميل المستخدم
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // فحص التوكن عند تحميل التطبيق
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          // طلب للتحقق من التوكن وجلب بيانات المستخدم
-          const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setUser(res.data.user); // تحديث بيانات المستخدم
-        } catch (err) {
-          console.error('Error verifying token:', err.response?.data?.message || err.message);
-          localStorage.removeItem('token'); // إزالة التوكن إذا كان غير صالح
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
-      setLoading(false); // إنهاء التحميل
-    };
+  if (!process.env.REACT_APP_API_URL) {
+    console.error('REACT_APP_API_URL is not defined in environment variables');
+    throw new Error('REACT_APP_API_URL is required');
+  }
 
-    checkAuth();
-  }, []);
-
-  const login = async (code, password) => {
-    try {
-      const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/users/login`, {
-        code,
-        password,
-      });
-      localStorage.setItem('token', res.data.token);
-      setUser(res.data.user);
-      navigate('/dashboard');
-    } catch (err) {
-      throw err;
+  const checkAuth = async (retries = 2, delay = 1000) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.log('No token found in localStorage');
+      setUser(null);
+      setLoading(false);
+      return;
     }
+
+    const controller = new AbortController();
+    try {
+      console.log('Sending request to /api/users/me with token:', token.substring(0, 20) + '...');
+      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      console.log('User fetched successfully:', res.data.user);
+      setUser(res.data.user);
+    } catch (err) {
+      if (err.code === 'ERR_CANCELED') {
+        console.log('Request to /api/users/me was canceled');
+        return;
+      }
+      if (retries > 0) {
+        console.log(`Retrying /api/users/me, attempts left: ${retries}`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return checkAuth(retries - 1, delay * 2);
+      }
+      console.error('Error verifying token:', {
+        message: err.response?.data?.message || err.message,
+        status: err.response?.status,
+        url: `${process.env.REACT_APP_API_URL}/api/users/me`,
+      });
+      localStorage.removeItem('token');
+      setUser(null);
+      navigate('/login', { replace: true });
+    } finally {
+      setLoading(false);
+    }
+    return () => controller.abort();
   };
 
-  const logout = () => {
+  useEffect(() => {
+    checkAuth().catch((err) => console.error('CheckAuth failed:', err));
+  }, [navigate]);
+
+  const login = useCallback(
+    async (code, password) => {
+      try {
+        console.log('Attempting login with code:', code);
+        const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/login`, {
+          code,
+          password,
+        });
+        console.log('Login successful, user:', res.data.user);
+        localStorage.setItem('token', res.data.token);
+        setUser(res.data.user);
+        setLoading(false);
+        navigate('/dashboard', { replace: true });
+      } catch (err) {
+        console.error('Login error:', {
+          message: err.response?.data?.message || err.message,
+          status: err.response?.status,
+        });
+        throw err;
+      }
+    },
+    [navigate]
+  );
+
+  const logout = useCallback(() => {
+    console.log('Logging out, removing token');
     localStorage.removeItem('token');
     setUser(null);
-    navigate('/login');
-  };
+    navigate('/login', { replace: true });
+  }, [navigate]);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
-      {!loading ? children : <div>جاري التحميل...</div>}
+    <AuthContext.Provider value={{ user, login, logout, loading, setUser }}>
+      {children}
     </AuthContext.Provider>
   );
 };

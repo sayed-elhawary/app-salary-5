@@ -1,9 +1,18 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import bcrypt from 'bcryptjs';
+import sanitizeHtml from 'sanitize-html'; // إضافة مكتبة لتنظيف المدخلات
 
 const router = express.Router();
 
+// التحقق من وجود JWT_SECRET
+if (!process.env.JWT_SECRET) {
+  console.error('JWT_SECRET is not defined in environment variables');
+  throw new Error('JWT_SECRET is required');
+}
+
+// Middleware للتحقق من صلاحية الأدمن
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
@@ -20,10 +29,32 @@ const authMiddleware = (req, res, next) => {
     next();
   } catch (error) {
     console.error('Invalid token:', error.message);
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'التوكن منتهي الصلاحية' });
+    }
     return res.status(401).json({ message: 'توكن غير صالح' });
   }
 };
 
+// جلب بيانات المستخدم الحالي بناءً على التوكن
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findOne({ code: req.user.code }).select('-password');
+    if (!user) {
+      console.error(`User with code ${req.user.code} not found`);
+      return res.status(404).json({ message: 'المستخدم غير موجود' });
+    }
+    const netSalaryData = await user.netSalary;
+    res.json({
+      user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName },
+    });
+  } catch (err) {
+    console.error('Error fetching current user:', err.message);
+    res.status(500).json({ message: 'خطأ في جلب بيانات المستخدم: ' + err.message });
+  }
+});
+
+// إنشاء مستخدم جديد
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const {
@@ -40,19 +71,29 @@ router.post('/', authMiddleware, async (req, res) => {
       workDaysPerWeek,
       status,
       createdBy,
-      totalAnnualLeave,
+      annualLeaveBalance,
       eidBonus,
       penaltiesValue,
       violationsInstallment,
       totalViolationsValue,
       advances,
+      totalOfficialLeaveDays,
+      monthlyLateAllowance,
+      customAnnualLeave,
     } = req.body;
 
-    if (!code || !fullName || !password || !department || !baseSalary || !bonusPercentage) {
+    // تنظيف المدخلات النصية
+    const sanitizedCode = sanitizeHtml(code);
+    const sanitizedFullName = sanitizeHtml(fullName);
+    const sanitizedDepartment = sanitizeHtml(department);
+
+    // التحقق من الحقول المطلوبة
+    if (!sanitizedCode || !sanitizedFullName || !password || !sanitizedDepartment || !baseSalary || !bonusPercentage) {
       console.error('Missing required fields:', { code, fullName, password, department, baseSalary, bonusPercentage });
       return res.status(400).json({ message: 'جميع الحقول المطلوبة يجب أن تكون موجودة' });
     }
 
+    // التحقق من القيم الرقمية
     const numericFields = {
       baseSalary,
       baseBonus,
@@ -61,12 +102,15 @@ router.post('/', authMiddleware, async (req, res) => {
       medicalInsurance,
       socialInsurance,
       workDaysPerWeek,
-      totalAnnualLeave,
+      annualLeaveBalance,
       eidBonus,
       penaltiesValue,
       violationsInstallment,
       totalViolationsValue,
       advances,
+      totalOfficialLeaveDays,
+      monthlyLateAllowance,
+      customAnnualLeave,
     };
 
     for (const [key, value] of Object.entries(numericFields)) {
@@ -76,17 +120,19 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
-    const existingUser = await User.findOne({ code });
+    // التحقق من وجود مستخدم بنفس الكود
+    const existingUser = await User.findOne({ code: sanitizedCode });
     if (existingUser) {
-      console.error(`User with code ${code} already exists`);
+      console.error(`User with code ${sanitizedCode} already exists`);
       return res.status(400).json({ message: 'الكود مستخدم بالفعل' });
     }
 
+    // إنشاء مستخدم جديد
     const user = new User({
-      code,
-      fullName,
-      password,
-      department,
+      code: sanitizedCode,
+      fullName: sanitizedFullName,
+      password, // سيتم تشفير كلمة المرور في middleware pre-save
+      department: sanitizedDepartment,
       baseSalary: parseFloat(baseSalary) || 0,
       baseBonus: parseFloat(baseBonus) || 0,
       bonusPercentage: parseFloat(bonusPercentage) || 0,
@@ -95,37 +141,44 @@ router.post('/', authMiddleware, async (req, res) => {
       socialInsurance: parseFloat(socialInsurance) || 0,
       workDaysPerWeek: parseInt(workDaysPerWeek) || 5,
       status: status || 'active',
-      createdBy,
-      totalAnnualLeave: parseInt(totalAnnualLeave) || 0,
+      createdBy: createdBy || req.user.code,
+      annualLeaveBalance: parseInt(annualLeaveBalance) || 21,
       role: 'user',
       eidBonus: parseFloat(eidBonus) || 0,
       penaltiesValue: parseFloat(penaltiesValue) || 0,
       violationsInstallment: parseFloat(violationsInstallment) || 0,
       totalViolationsValue: parseFloat(totalViolationsValue) || 0,
       advances: parseFloat(advances) || 0,
+      totalOfficialLeaveDays: parseInt(totalOfficialLeaveDays) || 0,
+      monthlyLateAllowance: parseFloat(monthlyLateAllowance) || 120,
+      customAnnualLeave: parseInt(customAnnualLeave) || 0,
     });
 
     await user.save();
     const netSalaryData = await user.netSalary;
-    console.log(`User created successfully: ${code}`, {
+    console.log(`User created successfully: ${sanitizedCode}`, {
       violationsInstallment: user.violationsInstallment,
       baseSalary: user.baseSalary,
       advances: user.advances,
       netSalary: netSalaryData.netSalary,
     });
-    res.status(201).json({ user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName } });
+    res.status(201).json({
+      user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName },
+    });
   } catch (err) {
     console.error('Error creating user:', err.message);
     res.status(400).json({ message: 'خطأ في إنشاء المستخدم: ' + err.message });
   }
 });
 
+// تحديث بيانات مستخدم
 router.put('/:code', authMiddleware, async (req, res) => {
   try {
     console.log('Received update request for user:', req.params.code, 'Data:', req.body);
     const {
       code,
       fullName,
+      password,
       department,
       baseSalary,
       baseBonus,
@@ -136,26 +189,30 @@ router.put('/:code', authMiddleware, async (req, res) => {
       workDaysPerWeek,
       status,
       createdBy,
-      totalAnnualLeave,
-      role,
+      annualLeaveBalance,
       eidBonus,
       penaltiesValue,
       violationsInstallment,
       totalViolationsValue,
       advances,
+      totalOfficialLeaveDays,
+      monthlyLateAllowance,
+      customAnnualLeave,
     } = req.body;
 
+    // تنظيف المدخلات النصية
+    const sanitizedCode = code ? sanitizeHtml(code) : undefined;
+    const sanitizedFullName = fullName ? sanitizeHtml(fullName) : undefined;
+    const sanitizedDepartment = department ? sanitizeHtml(department) : undefined;
+
+    // البحث عن المستخدم
     const user = await User.findOne({ code: req.params.code });
     if (!user) {
       console.error(`User with code ${req.params.code} not found`);
       return res.status(404).json({ message: 'المستخدم غير موجود' });
     }
 
-    if (role && role !== 'user') {
-      console.error('Attempt to set role to admin:', role);
-      return res.status(403).json({ message: 'لا يمكن تعيين الرول إلى admin من هذه الواجهة' });
-    }
-
+    // التحقق من القيم الرقمية
     const numericFields = {
       baseSalary,
       baseBonus,
@@ -164,12 +221,15 @@ router.put('/:code', authMiddleware, async (req, res) => {
       medicalInsurance,
       socialInsurance,
       workDaysPerWeek,
-      totalAnnualLeave,
+      annualLeaveBalance,
       eidBonus,
       penaltiesValue,
       violationsInstallment,
       totalViolationsValue,
       advances,
+      totalOfficialLeaveDays,
+      monthlyLateAllowance,
+      customAnnualLeave,
     };
 
     for (const [key, value] of Object.entries(numericFields)) {
@@ -179,9 +239,13 @@ router.put('/:code', authMiddleware, async (req, res) => {
       }
     }
 
-    user.code = code || user.code;
-    user.fullName = fullName || user.fullName;
-    user.department = department || user.department;
+    // تحديث الحقول
+    user.code = sanitizedCode || user.code;
+    user.fullName = sanitizedFullName || user.fullName;
+    if (password) {
+      user.password = await bcrypt.hash(password, 10); // تشفير كلمة المرور يدويًا هنا
+    }
+    user.department = sanitizedDepartment || user.department;
     user.baseSalary = baseSalary !== undefined ? parseFloat(baseSalary) : user.baseSalary;
     user.baseBonus = baseBonus !== undefined ? parseFloat(baseBonus) : user.baseBonus;
     user.bonusPercentage = bonusPercentage !== undefined ? parseFloat(bonusPercentage) : user.bonusPercentage;
@@ -191,12 +255,15 @@ router.put('/:code', authMiddleware, async (req, res) => {
     user.workDaysPerWeek = workDaysPerWeek !== undefined ? parseInt(workDaysPerWeek) : user.workDaysPerWeek;
     user.status = status || user.status;
     user.createdBy = createdBy || user.createdBy;
-    user.totalAnnualLeave = totalAnnualLeave !== undefined ? parseInt(totalAnnualLeave) : user.totalAnnualLeave;
+    user.annualLeaveBalance = annualLeaveBalance !== undefined ? parseInt(annualLeaveBalance) : user.annualLeaveBalance;
     user.eidBonus = eidBonus !== undefined ? parseFloat(eidBonus) : user.eidBonus;
     user.penaltiesValue = penaltiesValue !== undefined ? parseFloat(penaltiesValue) : user.penaltiesValue;
     user.violationsInstallment = violationsInstallment !== undefined ? parseFloat(violationsInstallment) : user.violationsInstallment;
     user.totalViolationsValue = totalViolationsValue !== undefined ? parseFloat(totalViolationsValue) : user.totalViolationsValue;
     user.advances = advances !== undefined ? parseFloat(advances) : user.advances;
+    user.totalOfficialLeaveDays = totalOfficialLeaveDays !== undefined ? parseInt(totalOfficialLeaveDays) : user.totalOfficialLeaveDays;
+    user.monthlyLateAllowance = monthlyLateAllowance !== undefined ? parseFloat(monthlyLateAllowance) : user.monthlyLateAllowance;
+    user.customAnnualLeave = customAnnualLeave !== undefined ? parseInt(customAnnualLeave) : user.customAnnualLeave;
 
     await user.save();
     const netSalaryData = await user.netSalary;
@@ -207,69 +274,63 @@ router.put('/:code', authMiddleware, async (req, res) => {
       advances: user.advances,
       netSalary: netSalaryData.netSalary,
     });
-    res.json({ message: 'تم تحديث المستخدم بنجاح', user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName } });
+    res.json({
+      message: 'تم تحديث المستخدم بنجاح',
+      user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName },
+    });
   } catch (error) {
     console.error('Error updating user:', error.message);
     res.status(500).json({ message: 'خطأ في تحديث المستخدم: ' + error.message });
   }
 });
 
-router.get('/me', async (req, res) => {
+// جلب بيانات مستخدم بناءً على الكود
+router.get('/:code', authMiddleware, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      console.error('No token provided');
-      return res.status(401).json({ message: 'لا يوجد توكن' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findOne({ code: decoded.code }).select('-password');
+    const user = await User.findOne({ code: req.params.code }).select('-password');
     if (!user) {
-      console.error(`User with code ${decoded.code} not found`);
+      console.error(`User with code ${req.params.code} not found`);
       return res.status(404).json({ message: 'المستخدم غير موجود' });
     }
-
     const netSalaryData = await user.netSalary;
-    res.json({ user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName } });
+    res.json({
+      user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName },
+    });
   } catch (err) {
     console.error('Error fetching user:', err.message);
-    res.status(401).json({ message: 'التوكن غير صالح' });
+    res.status(500).json({ message: 'خطأ في جلب المستخدم: ' + err.message });
   }
 });
 
-router.post('/login', async (req, res) => {
+// جلب جميع المستخدمين
+router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { code, password } = req.body;
-    if (!code || !password) {
-      console.error('Missing code or password');
-      return res.status(400).json({ message: 'كود الموظف وكلمة المرور مطلوبان' });
+    const { code } = req.query;
+    if (code) {
+      // البحث عن مستخدم واحد بناءً على الكود
+      const user = await User.findOne({ code }).select('-password');
+      if (!user) {
+        console.error(`User with code ${code} not found`);
+        return res.status(404).json({ message: 'المستخدم غير موجود' });
+      }
+      const netSalaryData = await user.netSalary;
+      return res.json({
+        users: [{ ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName }],
+      });
     }
 
-    const user = await User.findOne({ code });
-    if (!user) {
-      console.error(`User with code ${code} not found`);
-      return res.status(401).json({ message: 'كود الموظف غير صحيح' });
-    }
-
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      console.error('Invalid password for user:', code);
-      return res.status(401).json({ message: 'كلمة المرور غير صحيحة' });
-    }
-
-    if (user.status !== 'active') {
-      console.error(`User ${code} is not active`);
-      return res.status(403).json({ message: 'الحساب غير نشط' });
-    }
-
-    const token = jwt.sign({ code: user.code, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: '7d',
-    });
-    const netSalaryData = await user.netSalary;
-    res.json({ token, user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName } });
+    // جلب جميع المستخدمين
+    const users = await User.find().select('-password');
+    const usersWithNetSalary = await Promise.all(
+      users.map(async (user) => {
+        const netSalaryData = await user.netSalary;
+        return { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName };
+      })
+    );
+    res.json({ users: usersWithNetSalary });
   } catch (err) {
-    console.error('Error logging in:', err.message);
-    res.status(500).json({ message: 'خطأ في الخادم: ' + err.message });
+    console.error('Error fetching users:', err.message);
+    res.status(500).json({ message: 'خطأ في جلب المستخدمين: ' + err.message });
   }
 });
 
