@@ -6,14 +6,66 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { DateTime } from 'luxon';
 import * as XLSX from 'xlsx';
-import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, TextRun } from 'docx';
+import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, TextRun, ShadingType } from 'docx';
 import { saveAs } from 'file-saver';
+import { XIcon } from 'lucide-react';
+
+const SuccessCheckmark = ({ onComplete }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1, transition: { duration: 0.5 } }}
+      exit={{ opacity: 0, scale: 0.5 }}
+      onAnimationComplete={onComplete}
+      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+    >
+      <motion.div
+        animate={{
+          scale: [1, 1.1, 1],
+          transition: { duration: 1.5, repeat: Infinity, repeatType: 'loop' },
+        }}
+        className="bg-gradient-to-br from-green-600 to-emerald-500 p-6 rounded-full shadow-lg w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center"
+      >
+        <svg className="w-12 h-12 sm:w-16 sm:h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <motion.path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3"
+            d="M5 13l4 4L19 7"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1, transition: { duration: 0.8 } }}
+          />
+        </svg>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+const LoadingSpinner = () => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50"
+  >
+    <div className="relative">
+      <motion.div
+        className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-t-transparent border-sky-400 rounded-full"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+      />
+      <span className="absolute inset-0 flex items-center justify-center text-gray-200 text-sm sm:text-base font-amiri">
+        جارٍ التحميل...
+      </span>
+    </div>
+  </motion.div>
+);
 
 const MonthlySalaryReport = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const [searchCode, setSearchCode] = useState('');
+  const [searchCode, setSearchCode] = useState(user?.role !== 'admin' ? user?.code || '' : '');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [salaryReports, setSalaryReports] = useState([]);
@@ -21,15 +73,74 @@ const MonthlySalaryReport = () => {
   const [editingReport, setEditingReport] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [error, setError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  // التحقق من صلاحيات المستخدم
   useEffect(() => {
-    if (!user || user.role !== 'admin') {
+    if (!user) {
       navigate('/login');
+    } else if (user.role !== 'admin') {
+      setSearchCode(user.code || '');
     }
   }, [user, navigate]);
 
-  // وظيفة البحث
+  const normalizeDays = (report) => {
+    const totalDays =
+      (parseInt(report.totalWorkDays, 10) || 0) +
+      (parseInt(report.totalAbsenceDays, 10) || 0) +
+      (parseInt(report.totalAnnualLeaveDays, 10) || 0) +
+      (parseInt(report.totalWeeklyLeaveDays, 10) || 0) +
+      (parseInt(report.totalMedicalLeaveDays, 10) || 0) +
+      (parseInt(report.totalOfficialLeaveDays, 10) || 0) +
+      (parseInt(report.totalLeaveCompensationDays, 10) || 0);
+
+    let updatedReport = { ...report };
+
+    if (totalDays !== 30) {
+      const daysDiff = 30 - totalDays;
+      updatedReport.totalWeeklyLeaveDays = (parseInt(report.totalWeeklyLeaveDays, 10) || 0) + daysDiff;
+    }
+
+    const baseMealAllowance = 500;
+    const absenceDays = parseInt(report.totalAbsenceDays, 10) || 0;
+    updatedReport.mealAllowance = Math.max(0, baseMealAllowance - absenceDays * 50).toFixed(2);
+
+    const lateDeductionDays = parseFloat(report.lateDeductionDays) || 0;
+    const medicalLeaveDeductionDays = parseFloat(report.medicalLeaveDeductionDays) || 0;
+    const totalDeductions = absenceDays + lateDeductionDays + medicalLeaveDeductionDays;
+    updatedReport.totalDeductions = totalDeductions.toFixed(2);
+    updatedReport.lateDeductionDays = lateDeductionDays.toFixed(2);
+    updatedReport.medicalLeaveDeductionDays = medicalLeaveDeductionDays.toFixed(2);
+
+    const dailySalary = parseFloat(report.baseSalary) / 30;
+    const hourlyRate = dailySalary / 9;
+
+    const penaltiesValue = parseFloat(report.penaltiesValue) || 0;
+    const violationsInstallment = parseFloat(report.violationsInstallment) || 0;
+    const advances = parseFloat(report.advances) || 0;
+    updatedReport.deductionsValue = (totalDeductions * dailySalary + penaltiesValue + violationsInstallment + advances).toFixed(2);
+
+    updatedReport.penaltiesValue = penaltiesValue.toFixed(2);
+    updatedReport.violationsInstallment = violationsInstallment.toFixed(2);
+    updatedReport.totalViolationsValue = (penaltiesValue + violationsInstallment).toFixed(2);
+    updatedReport.advances = advances.toFixed(2);
+
+    const overtimeValue = (parseFloat(report.totalOvertime) || 0) * hourlyRate;
+    updatedReport.overtimeValue = overtimeValue.toFixed(2);
+
+    updatedReport.netSalary = (
+      parseFloat(report.baseSalary) +
+      parseFloat(updatedReport.mealAllowance) +
+      overtimeValue +
+      parseFloat(report.eidBonus || 0) +
+      parseFloat(report.totalLeaveCompensationValue || 0) -
+      parseFloat(report.medicalInsurance) -
+      parseFloat(report.socialInsurance) -
+      parseFloat(updatedReport.deductionsValue)
+    ).toFixed(2);
+
+    return updatedReport;
+  };
+
   const handleSearch = async () => {
     if (!dateFrom || !dateTo) {
       setError('يرجى إدخال تاريخ البداية وتاريخ النهاية');
@@ -52,124 +163,43 @@ const MonthlySalaryReport = () => {
     setError('');
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('لم يتم العثور على رمز المصادقة');
+      }
+      const params = user.role === 'admin' ? { code: searchCode, dateFrom, dateTo } : { code: user.code, dateFrom, dateTo };
       const res = await axios.get(
         `${process.env.REACT_APP_API_URL}/api/fingerprints/salary-report`,
         {
-          params: { code: searchCode, dateFrom, dateTo },
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          params,
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
-      // توحيد أيام الشهر إلى 30 وحساب بدل الوجبة والخصومات
-      const normalizedReports = res.data.salaryReports.map((report) => normalizeDays(report));
+      console.log('API Response:', res.data);
+      const normalizedReports = Array.isArray(res.data.salaryReports)
+        ? res.data.salaryReports.map((report) => normalizeDays(report))
+        : [normalizeDays(res.data)];
       setSalaryReports(normalizedReports);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
     } catch (err) {
-      console.error('Error fetching salary reports:', err.response?.data?.message || err.message);
+      console.error('Error fetching salary reports:', {
+        message: err.response?.data?.message || err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+      });
       setError(`خطأ أثناء البحث: ${err.response?.data?.message || err.message}`);
+      setSalaryReports([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // وظيفة عرض جميع السجلات
-  const handleShowAll = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      // استخدام الشهر الحالي كنطاق زمني افتراضي
-      const now = DateTime.local().setZone('Africa/Cairo');
-      const defaultDateFrom = now.startOf('month').toISODate();
-      const defaultDateTo = now.endOf('month').toISODate();
-
-      const res = await axios.get(
-        `${process.env.REACT_APP_API_URL}/api/fingerprints/salary-report`,
-        {
-          params: { code: '', dateFrom: defaultDateFrom, dateTo: defaultDateTo },
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        }
-      );
-      // توحيد أيام الشهر إلى 30 وحساب بدل الوجبة والخصومات
-      const normalizedReports = res.data.salaryReports.map((report) => normalizeDays(report));
-      setSalaryReports(normalizedReports);
-      setSearchCode('');
-      setDateFrom('');
-      setDateTo('');
-    } catch (err) {
-      console.error('Error fetching all salary reports:', err.response?.data?.message || err.message);
-      setError(`خطأ أثناء جلب جميع التقارير: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // وظيفة توحيد أيام الشهر إلى 30 وحساب بدل الوجبة والخصومات
-  const normalizeDays = (report) => {
-    const totalDays =
-      (parseInt(report.totalWorkDays, 10) || 0) +
-      (parseInt(report.totalAbsenceDays, 10) || 0) +
-      (parseInt(report.totalAnnualLeaveDays, 10) || 0) +
-      (parseInt(report.totalWeeklyLeaveDays, 10) || 0) +
-      (parseInt(report.totalMedicalLeaveDays, 10) || 0) +
-      (parseInt(report.totalOfficialLeaveDays, 10) || 0) +
-      (parseInt(report.totalLeaveCompensationDays, 10) || 0);
-
-    let updatedReport = { ...report };
-
-    // توحيد إجمالي الأيام إلى 30
-    if (totalDays !== 30) {
-      const daysDiff = 30 - totalDays;
-      updatedReport.totalWeeklyLeaveDays = (parseInt(report.totalWeeklyLeaveDays, 10) || 0) + daysDiff;
-    }
-
-    // حساب بدل الوجبة: خصم 50 جنيه لكل يوم غياب فقط
-    const baseMealAllowance = 500; // القيمة الافتراضية لبدل الوجبة
-    const absenceDays = parseInt(report.totalAbsenceDays, 10) || 0;
-    updatedReport.mealAllowance = Math.max(0, baseMealAllowance - absenceDays * 50).toFixed(2);
-
-    // حساب الخصومات (بالأيام)
-    const lateDeductionDays = parseFloat(report.lateDeductionDays) || 0;
-    const medicalLeaveDeductionDays = parseFloat(report.medicalLeaveDeductionDays) || 0;
-    const totalDeductions = absenceDays + lateDeductionDays + medicalLeaveDeductionDays;
-    updatedReport.totalDeductions = totalDeductions.toFixed(2);
-    updatedReport.lateDeductionDays = lateDeductionDays.toFixed(2);
-    updatedReport.medicalLeaveDeductionDays = medicalLeaveDeductionDays.toFixed(2);
-
-    // حساب الراتب اليومي وسعر الساعة
-    const dailySalary = parseFloat(report.baseSalary) / 30;
-    const hourlyRate = dailySalary / 9;
-
-    // حساب قيمة الخصومات
-    const penaltiesValue = parseFloat(report.penaltiesValue) || 0;
-    const violationsInstallment = parseFloat(report.violationsInstallment) || 0;
-    const advances = parseFloat(report.advances) || 0;
-    updatedReport.deductionsValue = (totalDeductions * dailySalary + penaltiesValue + violationsInstallment + advances).toFixed(2);
-
-    // تحديث قيم الحقول الجديدة
-    updatedReport.penaltiesValue = penaltiesValue.toFixed(2);
-    updatedReport.violationsInstallment = violationsInstallment.toFixed(2);
-    updatedReport.totalViolationsValue = (penaltiesValue + violationsInstallment).toFixed(2);
-    updatedReport.advances = advances.toFixed(2);
-
-    // حساب قيمة الساعات الإضافية
-    const overtimeValue = (parseFloat(report.totalOvertime) || 0) * hourlyRate;
-    updatedReport.overtimeValue = overtimeValue.toFixed(2);
-
-    // حساب الراتب الصافي
-    updatedReport.netSalary = (
-      parseFloat(report.baseSalary) +
-      parseFloat(updatedReport.mealAllowance) +
-      overtimeValue +
-      parseFloat(report.eidBonus || 0) +
-      parseFloat(report.totalLeaveCompensationValue || 0) -
-      parseFloat(report.medicalInsurance) -
-      parseFloat(report.socialInsurance) -
-      parseFloat(updatedReport.deductionsValue)
-    ).toFixed(2);
-
-    return updatedReport;
-  };
-
-  // فتح نموذج التعديل
   const handleEditClick = (report) => {
+    if (user.role !== 'admin') {
+      setError('التعديل متاح فقط للإداريين');
+      return;
+    }
     setEditingReport(report);
     setEditForm({
       code: report.code,
@@ -205,81 +235,69 @@ const MonthlySalaryReport = () => {
     });
   };
 
-  // تحديث حقول نموذج التعديل
   const handleEditChange = (e) => {
     const { name, value } = e.target;
     setEditForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // إرسال التعديلات
   const handleEditSubmit = async (e) => {
     e.preventDefault();
+    if (user.role !== 'admin') {
+      setError('التعديل متاح فقط للإداريين');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      // التحقق من صحة البيانات
       if (parseFloat(editForm.baseSalary) < 0) {
         setError('الراتب الأساسي لا يمكن أن يكون سالبًا');
-        setLoading(false);
         return;
       }
       if (parseFloat(editForm.medicalInsurance) < 0) {
         setError('التأمين الطبي لا يمكن أن يكون سالبًا');
-        setLoading(false);
         return;
       }
       if (parseFloat(editForm.socialInsurance) < 0) {
         setError('التأمين الاجتماعي لا يمكن أن يكون سالبًا');
-        setLoading(false);
         return;
       }
       if (parseFloat(editForm.totalOvertime) < 0) {
         setError('الساعات الإضافية لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseInt(editForm.totalAbsenceDays, 10) < 0) {
         setError('أيام الغياب لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseInt(editForm.totalAnnualLeaveDays, 10) < 0) {
         setError('أيام الإجازة السنوية لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseInt(editForm.totalMedicalLeaveDays, 10) < 0) {
         setError('أيام الإجازة الطبية لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseInt(editForm.totalOfficialLeaveDays, 10) < 0) {
         setError('أيام الإجازة الرسمية لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseInt(editForm.totalLeaveCompensationDays, 10) < 0) {
         setError('أيام بدل الإجازة لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseInt(editForm.totalWeeklyLeaveDays, 10) < 0) {
         setError('أيام الإجازة الأسبوعية لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseFloat(editForm.eidBonus) < 0) {
         setError('العيدية لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
       if (parseFloat(editForm.advances) < 0) {
         setError('السلف لا يمكن أن تكون سالبة');
-        setLoading(false);
         return;
       }
 
-      // حساب التغييرات في أيام الغياب والإجازة السنوية والإجازة الطبية
       const prevAbsenceDays = parseInt(editingReport.totalAbsenceDays, 10) || 0;
       const newAbsenceDays = parseInt(editForm.totalAbsenceDays, 10) || 0;
       const prevAnnualLeaveDays = parseInt(editingReport.totalAnnualLeaveDays, 10) || 0;
@@ -295,26 +313,21 @@ const MonthlySalaryReport = () => {
 
       const annualLeaveDaysDiff = newAnnualLeaveDays - prevAnnualLeaveDays;
 
-      // حساب الراتب اليومي وسعر الساعة (موحد على 30 يوم)
       const dailySalary = parseFloat(editForm.baseSalary) / 30;
       const hourlyRate = dailySalary / 9;
       const overtimeValue = (parseFloat(editForm.totalOvertime) || 0) * hourlyRate;
       const leaveCompensationValue = (newLeaveCompensationDays * dailySalary * 2).toFixed(2);
 
-      // حساب الخصومات (بالأيام)
       const updatedTotalDeductions = newAbsenceDays + lateDeductionDays + medicalLeaveDeductionDays;
 
-      // حساب قيمة الخصومات
       const penaltiesValue = parseFloat(editForm.penaltiesValue) || 0;
       const violationsInstallment = parseFloat(editForm.violationsInstallment) || 0;
       const advances = parseFloat(editForm.advances) || 0;
       const updatedDeductionsValue = (updatedTotalDeductions * dailySalary + penaltiesValue + violationsInstallment + advances).toFixed(2);
 
-      // حساب بدل الوجبة بناءً على أيام الغياب فقط
-      const baseMealAllowance = 500; // القيمة الافتراضية لبدل الوجبة
+      const baseMealAllowance = 500;
       const updatedMealAllowance = Math.max(0, baseMealAllowance - newAbsenceDays * 50).toFixed(2);
 
-      // التحقق من إجمالي الأيام (يجب أن يكون 30)
       const totalDays =
         (parseInt(editForm.totalWorkDays, 10) || 0) +
         newAbsenceDays +
@@ -328,7 +341,6 @@ const MonthlySalaryReport = () => {
         updatedWeeklyLeaveDays += 30 - totalDays;
       }
 
-      // حساب الراتب الصافي
       const updatedNetSalary = (
         parseFloat(editForm.baseSalary) +
         parseFloat(updatedMealAllowance) +
@@ -340,7 +352,6 @@ const MonthlySalaryReport = () => {
         parseFloat(updatedDeductionsValue)
       ).toFixed(2);
 
-      // تحديث بيانات المستخدم باستخدام PUT
       await axios.put(
         `${process.env.REACT_APP_API_URL}/api/users/${editForm.code}`,
         {
@@ -366,7 +377,6 @@ const MonthlySalaryReport = () => {
         }
       );
 
-      // تحديث التقرير في واجهة المستخدم
       setSalaryReports((prev) =>
         prev.map((report) =>
           report.code === editForm.code
@@ -395,41 +405,49 @@ const MonthlySalaryReport = () => {
       );
 
       setEditingReport(null);
-      alert('تم حفظ التعديلات بنجاح');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
     } catch (err) {
-      console.error('Error updating report:', err.response?.data?.message || err.message);
+      console.error('Error updating report:', {
+        message: err.response?.data?.message || err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+      });
       setError(`خطأ أثناء التعديل: ${err.response?.data?.message || err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // إلغاء التعديل
   const handleEditCancel = () => {
     setEditingReport(null);
     setEditForm({});
     setError('');
   };
 
-  // تصدير إلى Excel
   const handleExportToExcel = () => {
+    if (user.role !== 'admin') {
+      setError('تصدير التقرير متاح فقط للإداريين');
+      return;
+    }
     try {
-      const headers = [
+      const headers = user.role === 'admin' ? [
         'الراتب الصافي',
+        'عيدية',
         'إجمالي قيمة المخالفات',
         'قسط المخالفات',
         'قيمة الجزاءات',
         'السلف',
         'قيمة الخصومات',
         'إجمالي الخصومات (أيام)',
-        'خصم التأخير (أيام)',
         'خصم الإجازة الطبية (أيام)',
-        'إجمالي أيام الإجازة السنوية (السنة)',
+        'خصم التأخير (أيام)',
         'رصيد الإجازة السنوية',
-        'إجمالي أيام الإجازة الطبية',
-        'إجمالي أيام الإجازة الرسمية',
-        'إجمالي أيام بدل الإجازة',
+        'إجمالي أيام الإجازة السنوية (السنة)',
         'قيمة بدل الإجازة',
+        'إجمالي أيام بدل الإجازة',
+        'إجمالي أيام الإجازة الرسمية',
+        'إجمالي أيام الإجازة الطبية',
         'إجمالي أيام الإجازة السنوية (الفترة)',
         'إجمالي أيام الإجازة الأسبوعية',
         'قيمة الساعات الإضافية',
@@ -437,123 +455,241 @@ const MonthlySalaryReport = () => {
         'إجمالي أيام الغياب',
         'إجمالي أيام العمل',
         'إجمالي ساعات العمل',
-        'بدل الوجبة',
         'التأمين الاجتماعي',
         'التأمين الطبي',
+        'بدل الوجبة',
         'الراتب الأساسي',
-        'عيدية',
         'القسم',
         'الاسم',
         'كود الموظف',
+      ] : [
+        'الراتب الصافي',
+        'عيدية',
+        'السلف',
+        'قيمة الخصومات',
+        'خصم التأخير (أيام)',
+        'رصيد الإجازة السنوية',
+        'إجمالي أيام الإجازة السنوية (الفترة)',
+        'إجمالي أيام الإجازة الأسبوعية',
+        'قيمة الساعات الإضافية',
+        'إجمالي الساعات الإضافية',
+        'إجمالي أيام الغياب',
+        'إجمالي أيام العمل',
+        'إجمالي ساعات العمل',
+        'التأمين الاجتماعي',
+        'التأمين الطبي',
+        'بدل الوجبة',
+        'الراتب الأساسي',
       ];
 
-      // إعداد البيانات مع صف الإجمالي
-      const data = salaryReports.map((report) => ({
-        'الراتب الصافي': parseFloat(report.netSalary).toFixed(2),
-        'إجمالي قيمة المخالفات': parseFloat(report.totalViolationsValue || 0).toFixed(2),
-        'قسط المخالفات': parseFloat(report.violationsInstallment || 0).toFixed(2),
-        'قيمة الجزاءات': parseFloat(report.penaltiesValue || 0).toFixed(2),
-        'السلف': parseFloat(report.advances || 0).toFixed(2),
-        'قيمة الخصومات': parseFloat(report.deductionsValue || 0).toFixed(2),
-        'إجمالي الخصومات (أيام)': parseFloat(report.totalDeductions).toFixed(2),
-        'خصم التأخير (أيام)': parseFloat(report.lateDeductionDays || 0).toFixed(2),
-        'خصم الإجازة الطبية (أيام)': parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2),
-        'إجمالي أيام الإجازة السنوية (السنة)': parseInt(report.totalAnnualLeaveYear, 10) || 0,
-        'رصيد الإجازة السنوية': parseInt(report.annualLeaveBalance, 10) || 21,
-        'إجمالي أيام الإجازة الطبية': parseInt(report.totalMedicalLeaveDays, 10) || 0,
-        'إجمالي أيام الإجازة الرسمية': parseInt(report.totalOfficialLeaveDays, 10) || 0,
-        'إجمالي أيام بدل الإجازة': parseInt(report.totalLeaveCompensationDays, 10) || 0,
-        'قيمة بدل الإجازة': parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2),
-        'إجمالي أيام الإجازة السنوية (الفترة)': parseInt(report.totalAnnualLeaveDays, 10) || 0,
-        'إجمالي أيام الإجازة الأسبوعية': parseInt(report.totalWeeklyLeaveDays, 10) || 0,
-        'قيمة الساعات الإضافية': parseFloat(report.overtimeValue).toFixed(2),
-        'إجمالي الساعات الإضافية': parseFloat(report.totalOvertime).toFixed(2),
-        'إجمالي أيام الغياب': parseInt(report.totalAbsenceDays, 10) || 0,
-        'إجمالي أيام العمل': parseInt(report.totalWorkDays, 10) || 0,
-        'إجمالي ساعات العمل': parseFloat(report.totalWorkHours).toFixed(2),
-        'بدل الوجبة': parseFloat(report.mealAllowance).toFixed(2),
-        'التأمين الاجتماعي': parseFloat(report.socialInsurance).toFixed(2),
-        'التأمين الطبي': parseFloat(report.medicalInsurance).toFixed(2),
-        'الراتب الأساسي': parseFloat(report.baseSalary).toFixed(2),
-        'عيدية': parseFloat(report.eidBonus || 0).toFixed(2),
-        'القسم': report.department,
-        'الاسم': report.fullName,
-        'كود الموظف': report.code,
-      }));
+      const data = salaryReports.map((report) => {
+        const baseData = {
+          'الراتب الأساسي': parseFloat(report.baseSalary).toFixed(2),
+          'بدل الوجبة': parseFloat(report.mealAllowance).toFixed(2),
+          'التأمين الطبي': parseFloat(report.medicalInsurance).toFixed(2),
+          'التأمين الاجتماعي': parseFloat(report.socialInsurance).toFixed(2),
+          'إجمالي ساعات العمل': parseFloat(report.totalWorkHours).toFixed(2),
+          'إجمالي أيام العمل': parseInt(report.totalWorkDays, 10) || 0,
+          'إجمالي أيام الغياب': parseInt(report.totalAbsenceDays, 10) || 0,
+          'إجمالي الساعات الإضافية': parseFloat(report.totalOvertime).toFixed(2),
+          'قيمة الساعات الإضافية': parseFloat(report.overtimeValue).toFixed(2),
+          'إجمالي أيام الإجازة الأسبوعية': parseInt(report.totalWeeklyLeaveDays, 10) || 0,
+          'إجمالي أيام الإجازة السنوية (الفترة)': parseInt(report.totalAnnualLeaveDays, 10) || 0,
+          'رصيد الإجازة السنوية': parseInt(report.annualLeaveBalance, 10) || 21,
+          'خصم التأخير (أيام)': parseFloat(report.lateDeductionDays || 0).toFixed(2),
+          'قيمة الخصومات': parseFloat(report.deductionsValue || 0).toFixed(2),
+          'السلف': parseFloat(report.advances || 0).toFixed(2),
+          'عيدية': parseFloat(report.eidBonus || 0).toFixed(2),
+          'الراتب الصافي': parseFloat(report.netSalary).toFixed(2),
+        };
+        if (user.role === 'admin') {
+          return {
+            ...baseData,
+            'كود الموظف': report.code,
+            'الاسم': report.fullName,
+            'القسم': report.department,
+            'إجمالي أيام الإجازة السنوية (السنة)': parseInt(report.totalAnnualLeaveYear, 10) || 0,
+            'قيمة بدل الإجازة': parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2),
+            'إجمالي أيام بدل الإجازة': parseInt(report.totalLeaveCompensationDays, 10) || 0,
+            'إجمالي أيام الإجازة الرسمية': parseInt(report.totalOfficialLeaveDays, 10) || 0,
+            'إجمالي أيام الإجازة الطبية': parseInt(report.totalMedicalLeaveDays, 10) || 0,
+            'خصم الإجازة الطبية (أيام)': parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2),
+            'إجمالي الخصومات (أيام)': parseFloat(report.totalDeductions).toFixed(2),
+            'قيمة الجزاءات': parseFloat(report.penaltiesValue || 0).toFixed(2),
+            'قسط المخالفات': parseFloat(report.violationsInstallment || 0).toFixed(2),
+            'إجمالي قيمة المخالفات': parseFloat(report.totalViolationsValue || 0).toFixed(2),
+          };
+        }
+        return baseData;
+      });
 
-      // حساب الإجمالي
-      const totals = {
+      const totals = user.role === 'admin' ? {
         'الراتب الصافي': salaryReports.reduce((sum, report) => sum + parseFloat(report.netSalary || 0), 0).toFixed(2),
+        'عيدية': salaryReports.reduce((sum, report) => sum + parseFloat(report.eidBonus || 0), 0).toFixed(2),
         'إجمالي قيمة المخالفات': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalViolationsValue || 0), 0).toFixed(2),
         'قسط المخالفات': salaryReports.reduce((sum, report) => sum + parseFloat(report.violationsInstallment || 0), 0).toFixed(2),
         'قيمة الجزاءات': salaryReports.reduce((sum, report) => sum + parseFloat(report.penaltiesValue || 0), 0).toFixed(2),
         'السلف': salaryReports.reduce((sum, report) => sum + parseFloat(report.advances || 0), 0).toFixed(2),
         'قيمة الخصومات': salaryReports.reduce((sum, report) => sum + parseFloat(report.deductionsValue || 0), 0).toFixed(2),
         'إجمالي الخصومات (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalDeductions || 0), 0).toFixed(2),
-        'خصم التأخير (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
         'خصم الإجازة الطبية (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalLeaveDeductionDays || 0), 0).toFixed(2),
-        'إجمالي أيام الإجازة السنوية (السنة)': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveYear, 10) || 0), 0),
-        'رصيد الإجازة السنوية': salaryReports.reduce((sum, report) => sum + (parseInt(report.annualLeaveBalance, 10) || 21), 0),
-        'إجمالي أيام الإجازة الطبية': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalMedicalLeaveDays, 10) || 0), 0),
-        'إجمالي أيام الإجازة الرسمية': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalOfficialLeaveDays, 10) || 0), 0),
-        'إجمالي أيام بدل الإجازة': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalLeaveCompensationDays, 10) || 0), 0),
+        'خصم التأخير (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
+        'رصيد الإجازة السنوية': salaryReports.reduce((sum, report) => sum + parseInt(report.annualLeaveBalance, 10) || 21, 0),
+        'إجمالي أيام الإجازة السنوية (السنة)': salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveYear, 10) || 0, 0),
         'قيمة بدل الإجازة': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalLeaveCompensationValue || 0), 0).toFixed(2),
-        'إجمالي أيام الإجازة السنوية (الفترة)': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveDays, 10) || 0), 0),
-        'إجمالي أيام الإجازة الأسبوعية': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalWeeklyLeaveDays, 10) || 0), 0),
+        'إجمالي أيام بدل الإجازة': salaryReports.reduce((sum, report) => sum + parseInt(report.totalLeaveCompensationDays, 10) || 0, 0),
+        'إجمالي أيام الإجازة الرسمية': salaryReports.reduce((sum, report) => sum + parseInt(report.totalOfficialLeaveDays, 10) || 0, 0),
+        'إجمالي أيام الإجازة الطبية': salaryReports.reduce((sum, report) => sum + parseInt(report.totalMedicalLeaveDays, 10) || 0, 0),
+        'إجمالي أيام الإجازة السنوية (الفترة)': salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveDays, 10) || 0, 0),
+        'إجمالي أيام الإجازة الأسبوعية': salaryReports.reduce((sum, report) => sum + parseInt(report.totalWeeklyLeaveDays, 10) || 0, 0),
         'قيمة الساعات الإضافية': salaryReports.reduce((sum, report) => sum + parseFloat(report.overtimeValue || 0), 0).toFixed(2),
         'إجمالي الساعات الإضافية': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalOvertime || 0), 0).toFixed(2),
-        'إجمالي أيام الغياب': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAbsenceDays, 10) || 0), 0),
-        'إجمالي أيام العمل': salaryReports.reduce((sum, report) => sum + (parseInt(report.totalWorkDays, 10) || 0), 0),
+        'إجمالي أيام الغياب': salaryReports.reduce((sum, report) => sum + parseInt(report.totalAbsenceDays, 10) || 0, 0),
+        'إجمالي أيام العمل': salaryReports.reduce((sum, report) => sum + parseInt(report.totalWorkDays, 10) || 0, 0),
         'إجمالي ساعات العمل': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalWorkHours || 0), 0).toFixed(2),
-        'بدل الوجبة': salaryReports.reduce((sum, report) => sum + parseFloat(report.mealAllowance || 0), 0).toFixed(2),
         'التأمين الاجتماعي': salaryReports.reduce((sum, report) => sum + parseFloat(report.socialInsurance || 0), 0).toFixed(2),
         'التأمين الطبي': salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalInsurance || 0), 0).toFixed(2),
+        'بدل الوجبة': salaryReports.reduce((sum, report) => sum + parseFloat(report.mealAllowance || 0), 0).toFixed(2),
         'الراتب الأساسي': salaryReports.reduce((sum, report) => sum + parseFloat(report.baseSalary || 0), 0).toFixed(2),
-        'عيدية': salaryReports.reduce((sum, report) => sum + parseFloat(report.eidBonus || 0), 0).toFixed(2),
         'القسم': 'الإجمالي',
         'الاسم': '',
         'كود الموظف': '',
+      } : {
+        'الراتب الصافي': salaryReports.reduce((sum, report) => sum + parseFloat(report.netSalary || 0), 0).toFixed(2),
+        'عيدية': salaryReports.reduce((sum, report) => sum + parseFloat(report.eidBonus || 0), 0).toFixed(2),
+        'السلف': salaryReports.reduce((sum, report) => sum + parseFloat(report.advances || 0), 0).toFixed(2),
+        'قيمة الخصومات': salaryReports.reduce((sum, report) => sum + parseFloat(report.deductionsValue || 0), 0).toFixed(2),
+        'خصم التأخير (أيام)': salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
+        'رصيد الإجازة السنوية': salaryReports.reduce((sum, report) => sum + parseInt(report.annualLeaveBalance, 10) || 21, 0),
+        'إجمالي أيام الإجازة السنوية (الفترة)': salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveDays, 10) || 0, 0),
+        'إجمالي أيام الإجازة الأسبوعية': salaryReports.reduce((sum, report) => sum + parseInt(report.totalWeeklyLeaveDays, 10) || 0, 0),
+        'قيمة الساعات الإضافية': salaryReports.reduce((sum, report) => sum + parseFloat(report.overtimeValue || 0), 0).toFixed(2),
+        'إجمالي الساعات الإضافية': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalOvertime || 0), 0).toFixed(2),
+        'إجمالي أيام الغياب': salaryReports.reduce((sum, report) => sum + parseInt(report.totalAbsenceDays, 10) || 0, 0),
+        'إجمالي أيام العمل': salaryReports.reduce((sum, report) => sum + parseInt(report.totalWorkDays, 10) || 0, 0),
+        'إجمالي ساعات العمل': salaryReports.reduce((sum, report) => sum + parseFloat(report.totalWorkHours || 0), 0).toFixed(2),
+        'التأمين الاجتماعي': salaryReports.reduce((sum, report) => sum + parseFloat(report.socialInsurance || 0), 0).toFixed(2),
+        'التأمين الطبي': salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalInsurance || 0), 0).toFixed(2),
+        'بدل الوجبة': salaryReports.reduce((sum, report) => sum + parseFloat(report.mealAllowance || 0), 0).toFixed(2),
+        'الراتب الأساسي': salaryReports.reduce((sum, report) => sum + parseFloat(report.baseSalary || 0), 0).toFixed(2),
       };
 
-      // إضافة صف الإجمالي إلى البيانات
       data.push(totals);
 
-      // إنشاء ورقة عمل
       const ws = XLSX.utils.json_to_sheet(data, { header: headers });
-      // ضبط عرض الأعمدة واتجاه النص
       ws['!cols'] = headers.map(() => ({ wch: 20 }));
-      ws['!rtl'] = true; // ضبط اتجاه النص إلى RTL
-      // تنسيق الرأسية
+      ws['!rtl'] = true;
       headers.forEach((_, index) => {
         const cell = XLSX.utils.encode_cell({ c: index, r: 0 });
         ws[cell].s = {
-          font: { name: 'Arial', sz: 12, bold: true },
-          alignment: { horizontal: 'right', vertical: 'center' },
-          fill: { fgColor: { rgb: 'D3D3D3' } },
+          font: { name: 'Amiri', sz: 12, bold: true, color: { rgb: 'FFFFFF' } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          fill: { fgColor: { rgb: '4B6587' } },
+          border: {
+            top: { style: 'thin', color: { rgb: '000000' } },
+            bottom: { style: 'thin', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: '000000' } },
+            right: { style: 'thin', color: { rgb: '000000' } },
+          },
         };
       });
-      // تنسيق صف الإجمالي
+      data.forEach((_, rowIndex) => {
+        headers.forEach((_, colIndex) => {
+          const cell = XLSX.utils.encode_cell({ c: colIndex, r: rowIndex + 1 });
+          ws[cell].s = {
+            font: { name: 'Amiri', sz: 11, color: { rgb: '333333' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: rowIndex % 2 === 0 ? 'F7F9FB' : 'FFFFFF' } },
+            border: {
+              top: { style: 'thin', color: { rgb: '000000' } },
+              bottom: { style: 'thin', color: { rgb: '000000' } },
+              left: { style: 'thin', color: { rgb: '000000' } },
+              right: { style: 'thin', color: { rgb: '000000' } },
+            },
+          };
+        });
+      });
+      const totalsRow = data.length;
       headers.forEach((_, index) => {
-        const cell = XLSX.utils.encode_cell({ c: index, r: data.length - 1 });
+        const cell = XLSX.utils.encode_cell({ c: index, r: totalsRow });
         ws[cell].s = {
-          font: { name: 'Arial', sz: 12, bold: true },
-          alignment: { horizontal: 'right', vertical: 'center' },
-          fill: { fgColor: { rgb: 'FFFF99' } },
+          font: { name: 'Amiri', sz: 12, bold: true, color: { rgb: 'FFFFFF' } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          fill: { fgColor: { rgb: 'A3BFFA' } },
+          border: {
+            top: { style: 'thin', color: { rgb: '000000' } },
+            bottom: { style: 'thin', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: '000000' } },
+            right: { style: 'thin', color: { rgb: '000000' } },
+          },
         };
       });
-      // إنشاء ملف Excel
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'تقرير المرتب الشهري');
-      XLSX.writeFile(wb, 'تقرير_المرتب_الشهري.xlsx');
+      XLSX.writeFile(wb, `تقرير_المرتب_الشهري_${dateFrom}_إلى_${dateTo}.xlsx`);
     } catch (err) {
       console.error('Error exporting to Excel:', err.message);
       setError('خطأ أثناء تصدير ملف Excel: ' + err.message);
     }
   };
 
-  // تصدير إلى Word
   const handleExportToWord = async () => {
+    if (user.role !== 'admin') {
+      setError('تصدير التقرير متاح فقط للإداريين');
+      return;
+    }
     try {
+      const headers = user.role === 'admin' ? [
+        'الراتب الصافي',
+        'عيدية',
+        'إجمالي قيمة المخالفات',
+        'قسط المخالفات',
+        'قيمة الجزاءات',
+        'السلف',
+        'قيمة الخصومات',
+        'إجمالي الخصومات (أيام)',
+        'خصم الإجازة الطبية (أيام)',
+        'خصم التأخير (أيام)',
+        'رصيد الإجازة السنوية',
+        'إجمالي أيام الإجازة السنوية (السنة)',
+        'قيمة بدل الإجازة',
+        'إجمالي أيام بدل الإجازة',
+        'إجمالي أيام الإجازة الرسمية',
+        'إجمالي أيام الإجازة الطبية',
+        'إجمالي أيام الإجازة السنوية (الفترة)',
+        'إجمالي أيام الإجازة الأسبوعية',
+        'قيمة الساعات الإضافية',
+        'إجمالي الساعات الإضافية',
+        'إجمالي أيام الغياب',
+        'إجمالي أيام العمل',
+        'إجمالي ساعات العمل',
+        'التأمين الاجتماعي',
+        'التأمين الطبي',
+        'بدل الوجبة',
+        'الراتب الأساسي',
+        'القسم',
+        'الاسم',
+        'كود الموظف',
+      ] : [
+        'الراتب الصافي',
+        'عيدية',
+        'السلف',
+        'قيمة الخصومات',
+        'خصم التأخير (أيام)',
+        'رصيد الإجازة السنوية',
+        'إجمالي أيام الإجازة السنوية (الفترة)',
+        'إجمالي أيام الإجازة الأسبوعية',
+        'قيمة الساعات الإضافية',
+        'إجمالي الساعات الإضافية',
+        'إجمالي أيام الغياب',
+        'إجمالي أيام العمل',
+        'إجمالي ساعات العمل',
+        'التأمين الاجتماعي',
+        'التأمين الطبي',
+        'بدل الوجبة',
+        'الراتب الأساسي',
+      ];
+
       const doc = new Document({
         sections: [
           {
@@ -570,188 +706,200 @@ const MonthlySalaryReport = () => {
                 spacing: { after: 200 },
                 children: [
                   new TextRun({
-                    font: 'Arial',
+                    font: 'Amiri',
                     size: 32,
                     rightToLeft: true,
+                    color: '4B6587',
                   }),
                 ],
               }),
               new Paragraph({
-                text: `تاريخ الإصدار: ${DateTime.local().setZone('Africa/Cairo').toFormat('yyyy-MM-dd')}`,
+                text: `تاريخ الإصدار: من ${DateTime.fromISO(dateFrom).toLocaleString(DateTime.DATE_FULL, { locale: 'ar' })} إلى ${DateTime.fromISO(dateTo).toLocaleString(DateTime.DATE_FULL, { locale: 'ar' })}`,
                 alignment: 'right',
                 spacing: { after: 400 },
                 children: [
                   new TextRun({
-                    font: 'Arial',
+                    font: 'Amiri',
                     size: 20,
                     rightToLeft: true,
+                    color: '333333',
                   }),
                 ],
               }),
               new Table({
                 width: { size: 100, type: WidthType.PERCENTAGE },
                 rows: [
-                  // رأس الجدول
                   new TableRow({
-                    children: [
-                      'الراتب الصافي',
-                      'إجمالي قيمة المخالفات',
-                      'قسط المخالفات',
-                      'قيمة الجزاءات',
-                      'السلف',
-                      'قيمة الخصومات',
-                      'إجمالي الخصومات (أيام)',
-                      'خصم التأخير (أيام)',
-                      'خصم الإجازة الطبية (أيام)',
-                      'إجمالي أيام الإجازة السنوية (السنة)',
-                      'رصيد الإجازة السنوية',
-                      'إجمالي أيام الإجازة الطبية',
-                      'إجمالي أيام الإجازة الرسمية',
-                      'إجمالي أيام بدل الإجازة',
-                      'قيمة بدل الإجازة',
-                      'إجمالي أيام الإجازة السنوية (الفترة)',
-                      'إجمالي أيام الإجازة الأسبوعية',
-                      'قيمة الساعات الإضافية',
-                      'إجمالي الساعات الإضافية',
-                      'إجمالي أيام الغياب',
-                      'إجمالي أيام العمل',
-                      'إجمالي ساعات العمل',
-                      'بدل الوجبة',
-                      'التأمين الاجتماعي',
-                      'التأمين الطبي',
-                      'الراتب الأساسي',
-                      'عيدية',
-                      'القسم',
-                      'الاسم',
-                      'كود الموظف',
-                    ].map(
+                    children: headers.map(
                       (header) =>
                         new TableCell({
                           children: [
                             new Paragraph({
                               text: header,
-                              alignment: 'right',
+                              alignment: 'center',
                               children: [
                                 new TextRun({
-                                  font: 'Arial',
+                                  font: 'Amiri',
                                   size: 20,
                                   bold: true,
                                   rightToLeft: true,
+                                  color: 'FFFFFF',
                                 }),
                               ],
                             }),
                           ],
-                          width: { size: 3.33, type: WidthType.PERCENTAGE },
+                          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+                          shading: { fill: '4B6587', type: ShadingType.SOLID },
                         })
                     ),
                   }),
-                  // بيانات التقارير
                   ...salaryReports.map(
-                    (report) =>
-                      new TableRow({
-                        children: [
-                          parseFloat(report.netSalary).toFixed(2),
-                          parseFloat(report.totalViolationsValue || 0).toFixed(2),
-                          parseFloat(report.violationsInstallment || 0).toFixed(2),
-                          parseFloat(report.penaltiesValue || 0).toFixed(2),
-                          parseFloat(report.advances || 0).toFixed(2),
-                          parseFloat(report.deductionsValue || 0).toFixed(2),
-                          parseFloat(report.totalDeductions).toFixed(2),
-                          parseFloat(report.lateDeductionDays || 0).toFixed(2),
-                          parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2),
-                          parseInt(report.totalAnnualLeaveYear, 10).toString() || '0',
-                          parseInt(report.annualLeaveBalance, 10).toString() || '21',
-                          parseInt(report.totalMedicalLeaveDays, 10).toString() || '0',
-                          parseInt(report.totalOfficialLeaveDays, 10).toString() || '0',
-                          parseInt(report.totalLeaveCompensationDays, 10).toString() || '0',
-                          parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2),
-                          parseInt(report.totalAnnualLeaveDays, 10).toString() || '0',
-                          parseInt(report.totalWeeklyLeaveDays, 10).toString() || '0',
-                          parseFloat(report.overtimeValue).toFixed(2),
-                          parseFloat(report.totalOvertime).toFixed(2),
-                          parseInt(report.totalAbsenceDays, 10).toString() || '0',
-                          parseInt(report.totalWorkDays, 10).toString() || '0',
-                          parseFloat(report.totalWorkHours).toFixed(2),
-                          parseFloat(report.mealAllowance).toFixed(2),
-                          parseFloat(report.socialInsurance).toFixed(2),
-                          parseFloat(report.medicalInsurance).toFixed(2),
-                          parseFloat(report.baseSalary).toFixed(2),
-                          parseFloat(report.eidBonus || 0).toFixed(2),
-                          report.department,
-                          report.fullName,
-                          report.code,
-                        ].map(
+                    (report, index) => {
+                      const rowData = user.role === 'admin' ? [
+                        parseFloat(report.netSalary).toFixed(2),
+                        parseFloat(report.eidBonus || 0).toFixed(2),
+                        parseFloat(report.totalViolationsValue || 0).toFixed(2),
+                        parseFloat(report.violationsInstallment || 0).toFixed(2),
+                        parseFloat(report.penaltiesValue || 0).toFixed(2),
+                        parseFloat(report.advances || 0).toFixed(2),
+                        parseFloat(report.deductionsValue || 0).toFixed(2),
+                        parseFloat(report.totalDeductions).toFixed(2),
+                        parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2),
+                        parseFloat(report.lateDeductionDays || 0).toFixed(2),
+                        parseInt(report.annualLeaveBalance, 10).toString() || '21',
+                        parseInt(report.totalAnnualLeaveYear, 10).toString() || '0',
+                        parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2),
+                        parseInt(report.totalLeaveCompensationDays, 10).toString() || '0',
+                        parseInt(report.totalOfficialLeaveDays, 10).toString() || '0',
+                        parseInt(report.totalMedicalLeaveDays, 10).toString() || '0',
+                        parseInt(report.totalAnnualLeaveDays, 10).toString() || '0',
+                        parseInt(report.totalWeeklyLeaveDays, 10).toString() || '0',
+                        parseFloat(report.overtimeValue).toFixed(2),
+                        parseFloat(report.totalOvertime).toFixed(2),
+                        parseInt(report.totalAbsenceDays, 10).toString() || '0',
+                        parseInt(report.totalWorkDays, 10).toString() || '0',
+                        parseFloat(report.totalWorkHours).toFixed(2),
+                        parseFloat(report.socialInsurance).toFixed(2),
+                        parseFloat(report.medicalInsurance).toFixed(2),
+                        parseFloat(report.mealAllowance).toFixed(2),
+                        parseFloat(report.baseSalary).toFixed(2),
+                        report.department,
+                        report.fullName,
+                        report.code,
+                      ] : [
+                        parseFloat(report.netSalary).toFixed(2),
+                        parseFloat(report.eidBonus || 0).toFixed(2),
+                        parseFloat(report.advances || 0).toFixed(2),
+                        parseFloat(report.deductionsValue || 0).toFixed(2),
+                        parseFloat(report.lateDeductionDays || 0).toFixed(2),
+                        parseInt(report.annualLeaveBalance, 10).toString() || '21',
+                        parseInt(report.totalAnnualLeaveDays, 10).toString() || '0',
+                        parseInt(report.totalWeeklyLeaveDays, 10).toString() || '0',
+                        parseFloat(report.overtimeValue).toFixed(2),
+                        parseFloat(report.totalOvertime).toFixed(2),
+                        parseInt(report.totalAbsenceDays, 10).toString() || '0',
+                        parseInt(report.totalWorkDays, 10).toString() || '0',
+                        parseFloat(report.totalWorkHours).toFixed(2),
+                        parseFloat(report.socialInsurance).toFixed(2),
+                        parseFloat(report.medicalInsurance).toFixed(2),
+                        parseFloat(report.mealAllowance).toFixed(2),
+                        parseFloat(report.baseSalary).toFixed(2),
+                      ];
+                      return new TableRow({
+                        children: rowData.map(
                           (value) =>
                             new TableCell({
                               children: [
                                 new Paragraph({
                                   text: value,
-                                  alignment: 'right',
+                                  alignment: 'center',
                                   children: [
                                     new TextRun({
-                                      font: 'Arial',
+                                      font: 'Amiri',
                                       size: 20,
                                       rightToLeft: true,
+                                      color: '333333',
                                     }),
                                   ],
                                 }),
                               ],
-                              width: { size: 3.33, type: WidthType.PERCENTAGE },
+                              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+                              shading: { fill: index % 2 === 0 ? 'F7F9FB' : 'FFFFFF', type: ShadingType.SOLID },
                             })
                         ),
-                      })
+                      });
+                    }
                   ),
-                  // صف الإجمالي
                   new TableRow({
-                    children: [
+                    children: (user.role === 'admin' ? [
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.netSalary || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.eidBonus || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.totalViolationsValue || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.violationsInstallment || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.penaltiesValue || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.advances || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.deductionsValue || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.totalDeductions || 0), 0).toFixed(2),
-                      salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalLeaveDeductionDays || 0), 0).toFixed(2),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveYear, 10) || 0), 0).toString(),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.annualLeaveBalance, 10) || 21), 0).toString(),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalMedicalLeaveDays, 10) || 0), 0).toString(),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalOfficialLeaveDays, 10) || 0), 0).toString(),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalLeaveCompensationDays, 10) || 0), 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.annualLeaveBalance, 10) || 21, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveYear, 10) || 0, 0).toString(),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.totalLeaveCompensationValue || 0), 0).toFixed(2),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAnnualLeaveDays, 10) || 0), 0).toString(),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalWeeklyLeaveDays, 10) || 0), 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalLeaveCompensationDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalOfficialLeaveDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalMedicalLeaveDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalWeeklyLeaveDays, 10) || 0, 0).toString(),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.overtimeValue || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.totalOvertime || 0), 0).toFixed(2),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalAbsenceDays, 10) || 0), 0).toString(),
-                      salaryReports.reduce((sum, report) => sum + (parseInt(report.totalWorkDays, 10) || 0), 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalAbsenceDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalWorkDays, 10) || 0, 0).toString(),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.totalWorkHours || 0), 0).toFixed(2),
-                      salaryReports.reduce((sum, report) => sum + parseFloat(report.mealAllowance || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.socialInsurance || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalInsurance || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.mealAllowance || 0), 0).toFixed(2),
                       salaryReports.reduce((sum, report) => sum + parseFloat(report.baseSalary || 0), 0).toFixed(2),
-                      salaryReports.reduce((sum, report) => sum + parseFloat(report.eidBonus || 0), 0).toFixed(2),
                       'الإجمالي',
                       '',
                       '',
-                    ].map(
+                    ] : [
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.netSalary || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.eidBonus || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.advances || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.deductionsValue || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.annualLeaveBalance, 10) || 21, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalWeeklyLeaveDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.overtimeValue || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.totalOvertime || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalAbsenceDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseInt(report.totalWorkDays, 10) || 0, 0).toString(),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.totalWorkHours || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.socialInsurance || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalInsurance || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.mealAllowance || 0), 0).toFixed(2),
+                      salaryReports.reduce((sum, report) => sum + parseFloat(report.baseSalary || 0), 0).toFixed(2),
+                    ]).map(
                       (value) =>
                         new TableCell({
                           children: [
                             new Paragraph({
                               text: value,
-                              alignment: 'right',
+                              alignment: 'center',
                               children: [
                                 new TextRun({
-                                  font: 'Arial',
+                                  font: 'Amiri',
                                   size: 20,
                                   bold: true,
                                   rightToLeft: true,
+                                  color: 'FFFFFF',
                                 }),
                               ],
                             }),
                           ],
-                          width: { size: 3.33, type: WidthType.PERCENTAGE },
+                          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+                          shading: { fill: 'A3BFFA', type: ShadingType.SOLID },
                         })
                     ),
                   }),
@@ -763,127 +911,129 @@ const MonthlySalaryReport = () => {
       });
 
       const blob = await Packer.toBlob(doc);
-      saveAs(blob, 'تقرير_المرتب_الشهري.docx');
+      saveAs(blob, `تقرير_المرتب_الشهري_${dateFrom}_إلى_${dateTo}.docx`);
     } catch (err) {
       console.error('Error exporting to Word:', err.message);
       setError('خطأ أثناء تصدير ملف Word: ' + err.message);
     }
   };
 
-  // إذا لم يكن المستخدم أدمن، لا يتم عرض الصفحة
-  if (!user || user.role !== 'admin') return null;
+  if (!user) return null;
 
-
-
-
-return (
-    <div className="min-h-screen bg-gray-100">
+  return (
+    <div className="min-h-screen bg-gray-50">
       <NavBar />
       <div className="container mx-auto p-4 sm:p-6">
-        {/* قسم البحث */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 mb-6"
+          className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-200 mb-6"
         >
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">البحث في تقرير المرتب الشهري</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 text-right font-amiri">
+            {user.role === 'admin' ? 'البحث في تقرير المرتب الشهري' : 'تقرير راتبك الشهري'}
+          </h2>
+          {user.role !== 'admin' && (
+            <p className="text-gray-600 mb-4 text-right text-sm font-amiri">
+              أدخل الفترة الزمنية لعرض تقرير راتبك الخاص.
+            </p>
+          )}
           {error && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm"
+              className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm font-amiri"
             >
               {error}
             </motion.div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {user.role === 'admin' && (
+              <div>
+                <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
+                  كود الموظف
+                </label>
+                <input
+                  type="text"
+                  value={searchCode}
+                  onChange={(e) => setSearchCode(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
+                  placeholder="أدخل كود الموظف"
+                  dir="rtl"
+                  disabled={loading}
+                />
+              </div>
+            )}
             <div>
-              <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                كود الموظف
-              </label>
-              <input
-                type="text"
-                value={searchCode}
-                onChange={(e) => setSearchCode(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
-                placeholder="أدخل كود الموظف"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                 من تاريخ
               </label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
+                dir="rtl"
+                disabled={loading}
               />
             </div>
             <div>
-              <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                 إلى تاريخ
               </label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
+                dir="rtl"
+                disabled={loading}
               />
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-2 sm:gap-4 mt-4">
+          <div className="flex flex-wrap justify-end gap-3 mt-6">
             <motion.button
               onClick={handleSearch}
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm ${
+              className={`bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-300 text-sm font-amiri ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
               {loading ? 'جارٍ البحث...' : 'بحث'}
             </motion.button>
-            <motion.button
-              onClick={handleShowAll}
-              disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-300 text-sm ${
-                loading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {loading ? 'جارٍ الجلب...' : 'عرض الكل'}
-            </motion.button>
-            <motion.button
-              onClick={handleExportToExcel}
-              disabled={loading || salaryReports.length === 0}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`bg-green-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-300 text-sm ${
-                loading || salaryReports.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              تصدير إلى Excel
-            </motion.button>
-            <motion.button
-              onClick={handleExportToWord}
-              disabled={loading || salaryReports.length === 0}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`bg-blue-800 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-blue-900 transition-colors duration-300 text-sm ${
-                loading || salaryReports.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              تصدير إلى Word
-            </motion.button>
+            {user.role === 'admin' && (
+              <>
+                <motion.button
+                  onClick={handleExportToExcel}
+                  disabled={loading || salaryReports.length === 0}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors duration-300 text-sm font-amiri ${
+                    loading || salaryReports.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  تصدير إلى Excel
+                </motion.button>
+                <motion.button
+                  onClick={handleExportToWord}
+                  disabled={loading || salaryReports.length === 0}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors duration-300 text-sm font-amiri ${
+                    loading || salaryReports.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  تصدير إلى Word
+                </motion.button>
+              </>
+            )}
           </div>
         </motion.div>
 
-        {/* نموذج التعديل */}
         <AnimatePresence>
-          {editingReport && (
+          {user.role === 'admin' && editingReport && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -891,22 +1041,31 @@ return (
               className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto"
+                className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto relative"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">تعديل تقرير المرتب</h2>
+                <motion.button
+                  onClick={handleEditCancel}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="absolute top-3 left-3 text-gray-600 hover:text-red-600 transition-colors duration-300"
+                  aria-label="إغلاق"
+                >
+                  <XIcon className="h-6 w-6" />
+                </motion.button>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 text-right font-amiri">تعديل تقرير المرتب</h2>
                 {error && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm"
+                    className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm font-amiri"
                   >
                     {error}
                   </motion.div>
                 )}
-                <form onSubmit={handleEditSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <form onSubmit={handleEditSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       كود الموظف
                     </label>
                     <input
@@ -914,13 +1073,13 @@ return (
                       name="code"
                       value={editForm.code}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
-                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm font-amiri transition-all duration-300"
                       readOnly
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       الاسم الكامل
                     </label>
                     <input
@@ -928,12 +1087,13 @@ return (
                       name="fullName"
                       value={editForm.fullName}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       required
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       القسم
                     </label>
                     <input
@@ -941,12 +1101,13 @@ return (
                       name="department"
                       value={editForm.department}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       required
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       الراتب الأساسي
                     </label>
                     <input
@@ -954,14 +1115,15 @@ return (
                       name="baseSalary"
                       value={editForm.baseSalary}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       required
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       التأمين الطبي
                     </label>
                     <input
@@ -969,13 +1131,14 @@ return (
                       name="medicalInsurance"
                       value={editForm.medicalInsurance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       التأمين الاجتماعي
                     </label>
                     <input
@@ -983,13 +1146,14 @@ return (
                       name="socialInsurance"
                       value={editForm.socialInsurance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       عيدية
                     </label>
                     <input
@@ -997,25 +1161,27 @@ return (
                       name="eidBonus"
                       value={editForm.eidBonus}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       بدل الوجبة
                     </label>
                     <input
                       type="number"
                       name="mealAllowance"
                       value={editForm.mealAllowance}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm font-amiri transition-all duration-300"
                       readOnly
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي ساعات العمل
                     </label>
                     <input
@@ -1023,13 +1189,14 @@ return (
                       name="totalWorkHours"
                       value={editForm.totalWorkHours}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام العمل
                     </label>
                     <input
@@ -1037,12 +1204,13 @@ return (
                       name="totalWorkDays"
                       value={editForm.totalWorkDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام الغياب
                     </label>
                     <input
@@ -1050,60 +1218,13 @@ return (
                       name="totalAbsenceDays"
                       value={editForm.totalAbsenceDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                      خصم التأخير (أيام)
-                    </label>
-                    <input
-                      type="number"
-                      name="lateDeductionDays"
-                      value={editForm.lateDeductionDays}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                      خصم الإجازة الطبية (أيام)
-                    </label>
-                    <input
-                      type="number"
-                      name="medicalLeaveDeductionDays"
-                      value={editForm.medicalLeaveDeductionDays}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                      إجمالي الخصومات (أيام)
-                    </label>
-                    <input
-                      type="number"
-                      name="totalDeductions"
-                      value={editForm.totalDeductions}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                      قيمة الخصومات
-                    </label>
-                    <input
-                      type="number"
-                      name="deductionsValue"
-                      value={editForm.deductionsValue}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+		                      <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي الساعات الإضافية
                     </label>
                     <input
@@ -1111,25 +1232,14 @@ return (
                       name="totalOvertime"
                       value={editForm.totalOvertime}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                      قيمة الساعات الإضافية
-                    </label>
-                    <input
-                      type="number"
-                      name="overtimeValue"
-                      value={editForm.overtimeValue}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام الإجازة الأسبوعية
                     </label>
                     <input
@@ -1137,12 +1247,13 @@ return (
                       name="totalWeeklyLeaveDays"
                       value={editForm.totalWeeklyLeaveDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام الإجازة السنوية (الفترة)
                     </label>
                     <input
@@ -1150,12 +1261,13 @@ return (
                       name="totalAnnualLeaveDays"
                       value={editForm.totalAnnualLeaveDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام الإجازة الطبية
                     </label>
                     <input
@@ -1163,12 +1275,13 @@ return (
                       name="totalMedicalLeaveDays"
                       value={editForm.totalMedicalLeaveDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام الإجازة الرسمية
                     </label>
                     <input
@@ -1176,12 +1289,13 @@ return (
                       name="totalOfficialLeaveDays"
                       value={editForm.totalOfficialLeaveDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام بدل الإجازة
                     </label>
                     <input
@@ -1189,24 +1303,13 @@ return (
                       name="totalLeaveCompensationDays"
                       value={editForm.totalLeaveCompensationDays}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                      قيمة بدل الإجازة
-                    </label>
-                    <input
-                      type="number"
-                      name="totalLeaveCompensationValue"
-                      value={editForm.totalLeaveCompensationValue}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       إجمالي أيام الإجازة السنوية (السنة)
                     </label>
                     <input
@@ -1214,12 +1317,13 @@ return (
                       name="totalAnnualLeaveYear"
                       value={editForm.totalAnnualLeaveYear}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       رصيد الإجازة السنوية
                     </label>
                     <input
@@ -1227,12 +1331,43 @@ return (
                       name="annualLeaveBalance"
                       value={editForm.annualLeaveBalance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
+                      خصم التأخير (أيام)
+                    </label>
+                    <input
+                      type="number"
+                      name="lateDeductionDays"
+                      value={editForm.lateDeductionDays}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
+                      min="0"
+                      step="0.01"
+                      dir="rtl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
+                      خصم الإجازة الطبية (أيام)
+                    </label>
+                    <input
+                      type="number"
+                      name="medicalLeaveDeductionDays"
+                      value={editForm.medicalLeaveDeductionDays}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
+                      min="0"
+                      step="0.01"
+                      dir="rtl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       قيمة الجزاءات
                     </label>
                     <input
@@ -1240,13 +1375,14 @@ return (
                       name="penaltiesValue"
                       value={editForm.penaltiesValue}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       قسط المخالفات
                     </label>
                     <input
@@ -1254,25 +1390,14 @@ return (
                       name="violationsInstallment"
                       value={editForm.violationsInstallment}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
-                      إجمالي قيمة المخالفات
-                    </label>
-                    <input
-                      type="number"
-                      name="totalViolationsValue"
-                      value={editForm.totalViolationsValue}
-                      className="w-full px-3 py-2 border rounded-lg text-right bg-gray-100 cursor-not-allowed text-sm"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right font-amiri">
                       السلف
                     </label>
                     <input
@@ -1280,219 +1405,260 @@ return (
                       name="advances"
                       value={editForm.advances}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-amiri transition-all duration-300"
                       min="0"
                       step="0.01"
+                      dir="rtl"
                     />
                   </div>
-                  <div className="sm:col-span-3 flex justify-end gap-2 sm:gap-4">
-                    <motion.button
-                      type="submit"
-                      disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 text-sm ${
-                        loading ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      {loading ? 'جارٍ الحفظ...' : 'حفظ'}
-                    </motion.button>
-                    <motion.button
-                      type="button"
-                      onClick={handleEditCancel}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="bg-gray-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-300 text-sm"
-                    >
-                      إلغاء
-                    </motion.button>
-                  </div>
                 </form>
+                <div className="flex justify-end gap-3 mt-6">
+                  <motion.button
+                    onClick={handleEditSubmit}
+                    disabled={loading}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-300 text-sm font-amiri ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {loading ? 'جارٍ الحفظ...' : 'حفظ'}
+                  </motion.button>
+                  <motion.button
+                    onClick={handleEditCancel}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors duration-300 text-sm font-amiri"
+                  >
+                    إلغاء
+                  </motion.button>
+                </div>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* جدول التقارير */}
         {salaryReports.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100"
+            transition={{ duration: 0.5 }}
+            className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-200"
           >
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">تقرير المرتب الشهري</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 text-right font-amiri">نتائج تقرير المرتب</h2>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      كود الموظف
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      الاسم
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      القسم
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      الراتب الأساسي
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      التأمين الطبي
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      التأمين الاجتماعي
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      بدل الوجبة
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      عيدية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي ساعات العمل
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام العمل
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام الغياب
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      خصم التأخير (أيام)
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      خصم الإجازة الطبية (أيام)
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي الخصومات (أيام)
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      قيمة الخصومات
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي الساعات الإضافية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      قيمة الساعات الإضافية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام الإجازة الأسبوعية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام الإجازة السنوية (الفترة)
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام الإجازة الطبية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام الإجازة الرسمية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام بدل الإجازة
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      قيمة بدل الإجازة
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي أيام الإجازة السنوية (السنة)
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      رصيد الإجازة السنوية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      قيمة الجزاءات
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      قسط المخالفات
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجمالي قيمة المخالفات
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      السلف
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      الراتب الصافي
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      إجراءات
-                    </th>
+              <table className="w-full table-auto border-collapse">
+                <thead>
+                  <tr className="bg-blue-100">
+                    {user.role === 'admin' && (
+                      <>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">الإجراءات</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">كود الموظف</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">الاسم</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">القسم</th>
+                      </>
+                    )}
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">الراتب الأساسي</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">بدل الوجبة</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">التأمين الطبي</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">التأمين الاجتماعي</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي ساعات العمل</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام العمل</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام الغياب</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي الساعات الإضافية</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">قيمة الساعات الإضافية</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام الإجازة الأسبوعية</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام الإجازة السنوية (الفترة)</th>
+                    {user.role === 'admin' && (
+                      <>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام الإجازة الطبية</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام الإجازة الرسمية</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام بدل الإجازة</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">قيمة بدل الإجازة</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي أيام الإجازة السنوية (السنة)</th>
+                      </>
+                    )}
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">رصيد الإجازة السنوية</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">خصم التأخير (أيام)</th>
+                    {user.role === 'admin' && (
+                      <>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">خصم الإجازة الطبية (أيام)</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي الخصومات (أيام)</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">قيمة الجزاءات</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">قسط المخالفات</th>
+                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">إجمالي قيمة المخالفات</th>
+                      </>
+                    )}
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">السلف</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">قيمة الخصومات</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">عيدية</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700 font-amiri border border-gray-300">الراتب الصافي</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {salaryReports.map((report, index) => (
-                    <tr key={index}>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{report.code}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{report.fullName}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{report.department}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.baseSalary).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.medicalInsurance).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.socialInsurance).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.mealAllowance).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.eidBonus || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalWorkHours).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalWorkDays, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalAbsenceDays, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.lateDeductionDays || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalDeductions).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.deductionsValue || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalOvertime).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.overtimeValue).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalWeeklyLeaveDays, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalAnnualLeaveDays, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalMedicalLeaveDays, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalOfficialLeaveDays, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalLeaveCompensationDays, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.totalAnnualLeaveYear, 10) || 0}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(report.annualLeaveBalance, 10) || 21}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.penaltiesValue || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.violationsInstallment || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.totalViolationsValue || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.advances || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(report.netSalary).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <motion.button
-                          onClick={() => handleEditClick(report)}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="bg-yellow-500 text-white px-3 py-1 rounded-md hover:bg-yellow-600 transition-colors duration-300 text-xs sm:text-sm"
-                        >
-                          تعديل
-                        </motion.button>
-                      </td>
+                    <tr key={report.code} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      {user.role === 'admin' && (
+                        <>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">
+                            <motion.button
+                              onClick={() => handleEditClick(report)}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 transition-colors duration-300 text-sm font-amiri"
+                            >
+                              تعديل
+                            </motion.button>
+                          </td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{report.code}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{report.fullName}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{report.department}</td>
+                        </>
+                      )}
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.baseSalary).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.mealAllowance).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.medicalInsurance).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.socialInsurance).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.totalWorkHours).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalWorkDays, 10) || 0}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalAbsenceDays, 10) || 0}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.totalOvertime).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.overtimeValue).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalWeeklyLeaveDays, 10) || 0}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalAnnualLeaveDays, 10) || 0}</td>
+                      {user.role === 'admin' && (
+                        <>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalMedicalLeaveDays, 10) || 0}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalOfficialLeaveDays, 10) || 0}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalLeaveCompensationDays, 10) || 0}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.totalLeaveCompensationValue || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.totalAnnualLeaveYear, 10) || 0}</td>
+                        </>
+                      )}
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseInt(report.annualLeaveBalance, 10) || 21}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.lateDeductionDays || 0).toFixed(2)}</td>
+                      {user.role === 'admin' && (
+                        <>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.medicalLeaveDeductionDays || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.totalDeductions).toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.penaltiesValue || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.violationsInstallment || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.totalViolationsValue || 0).toFixed(2)}</td>
+                        </>
+                      )}
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.advances || 0).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.deductionsValue || 0).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.eidBonus || 0).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-600 font-amiri border border-gray-300">{parseFloat(report.netSalary).toFixed(2)}</td>
                     </tr>
                   ))}
+                  <tr className="bg-blue-100 font-bold">
+                    {user.role === 'admin' && (
+                      <>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300"></td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300"></td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300"></td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">الإجمالي</td>
+                      </>
+                    )}
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.baseSalary || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.mealAllowance || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalInsurance || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.socialInsurance || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.totalWorkHours || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseInt(report.totalWorkDays, 10) || 0, 0)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseInt(report.totalAbsenceDays, 10) || 0, 0)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.totalOvertime || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.overtimeValue || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseInt(report.totalWeeklyLeaveDays, 10) || 0, 0)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveDays, 10) || 0, 0)}
+                    </td>
+                    {user.role === 'admin' && (
+                      <>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseInt(report.totalMedicalLeaveDays, 10) || 0, 0)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseInt(report.totalOfficialLeaveDays, 10) || 0, 0)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseInt(report.totalLeaveCompensationDays, 10) || 0, 0)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseFloat(report.totalLeaveCompensationValue || 0), 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseInt(report.totalAnnualLeaveYear, 10) || 0, 0)}
+                        </td>
+                      </>
+                    )}
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseInt(report.annualLeaveBalance, 10) || 21, 0)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.lateDeductionDays || 0), 0).toFixed(2)}
+                    </td>
+                    {user.role === 'admin' && (
+                      <>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseFloat(report.medicalLeaveDeductionDays || 0), 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseFloat(report.totalDeductions || 0), 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseFloat(report.penaltiesValue || 0), 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseFloat(report.violationsInstallment || 0), 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                          {salaryReports.reduce((sum, report) => sum + parseFloat(report.totalViolationsValue || 0), 0).toFixed(2)}
+                        </td>
+                      </>
+                    )}
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.advances || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.deductionsValue || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.eidBonus || 0), 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-700 font-amiri border border-gray-300">
+                      {salaryReports.reduce((sum, report) => sum + parseFloat(report.netSalary || 0), 0).toFixed(2)}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
           </motion.div>
         )}
 
-        {/* إذا لم تكن هناك تقارير */}
-        {salaryReports.length === 0 && !loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 text-center"
-          >
-            <p className="text-gray-700 text-sm sm:text-base">لا توجد تقارير متاحة. يرجى البحث أو عرض جميع التقارير.</p>
-          </motion.div>
-        )}
-
-        {/* مؤشر التحميل */}
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex justify-center items-center mt-6"
-          >
-            <div className="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {loading && <LoadingSpinner />}
+          {showSuccess && <SuccessCheckmark onComplete={() => setShowSuccess(false)} />}
+        </AnimatePresence>
       </div>
     </div>
   );

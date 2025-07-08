@@ -5,12 +5,20 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import fingerprintRoutes from './routes/fingerprints.js';
+import bonusReportsRoutes from './routes/bonus-reports.js';
 import connectDB from './config/db.js';
 
 dotenv.config();
 
+// التحقق من وجود MONGO_URI
 if (!process.env.MONGO_URI) {
   console.error('Error: MONGO_URI is not defined in .env file');
+  process.exit(1);
+}
+
+// التحقق من وجود JWT_SECRET
+if (!process.env.JWT_SECRET) {
+  console.error('Error: JWT_SECRET is not defined in .env file');
   process.exit(1);
 }
 
@@ -29,6 +37,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/fingerprints', fingerprintRoutes);
+app.use('/api/bonus-reports', bonusReportsRoutes);
 
 // Error-handling middleware
 app.use((err, req, res, next) => {

@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import AuthProvider, { AuthContext } from './components/AuthProvider';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -7,6 +7,7 @@ import CreateAccount from './pages/CreateAccount';
 import UploadFingerprint from './pages/UploadFingerprint';
 import Reports from './pages/Reports';
 import MonthlySalaryReport from './pages/MonthlySalaryReport';
+import MonthlyBonusReport from './pages/MonthlyBonusReport';
 import UserSettings from './pages/UserSettings';
 
 const PrivateRoute = ({ children, role }) => {
@@ -123,7 +124,7 @@ const App = () => {
           <Route
             path="/dashboard"
             element={
-              <PrivateRoute role="admin">
+              <PrivateRoute>
                 <Dashboard />
               </PrivateRoute>
             }
@@ -139,7 +140,7 @@ const App = () => {
           <Route
             path="/upload-fingerprint"
             element={
-              <PrivateRoute>
+              <PrivateRoute role="admin">
                 <UploadFingerprint />
               </PrivateRoute>
             }
@@ -163,8 +164,16 @@ const App = () => {
           <Route
             path="/monthly-salary-report"
             element={
-              <PrivateRoute role="admin">
+              <PrivateRoute>
                 <MonthlySalaryReport />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/monthly-bonus-report"
+            element={
+              <PrivateRoute>
+                <MonthlyBonusReport />
               </PrivateRoute>
             }
           />

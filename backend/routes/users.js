@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
-import sanitizeHtml from 'sanitize-html'; // إضافة مكتبة لتنظيف المدخلات
+import sanitizeHtml from 'sanitize-html';
 
 const router = express.Router();
 
@@ -11,6 +11,26 @@ if (!process.env.JWT_SECRET) {
   console.error('JWT_SECRET is not defined in environment variables');
   throw new Error('JWT_SECRET is required');
 }
+
+// Middleware للتحقق من صحة التوكن فقط
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    console.error('No token provided in request');
+    return res.status(401).json({ message: 'غير مصرح، يرجى تقديم توكن' });
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    console.error('Invalid token:', error.message);
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'التوكن منتهي الصلاحية' });
+    }
+    return res.status(401).json({ message: 'توكن غير صالح' });
+  }
+};
 
 // Middleware للتحقق من صلاحية الأدمن
 const authMiddleware = (req, res, next) => {
@@ -37,7 +57,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 // جلب بيانات المستخدم الحالي بناءً على التوكن
-router.get('/me', authMiddleware, async (req, res) => {
+router.get('/me', verifyToken, async (req, res) => {
   try {
     const user = await User.findOne({ code: req.user.code }).select('-password');
     if (!user) {

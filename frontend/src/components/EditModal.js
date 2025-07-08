@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { DateTime } from 'luxon';
 
 const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
   const [checkIn, setCheckIn] = useState('');
@@ -11,22 +12,30 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
   const [medicalLeave, setMedicalLeave] = useState(false);
   const [officialLeave, setOfficialLeave] = useState(false);
   const [leaveCompensation, setLeaveCompensation] = useState(false);
+  const [appropriateValue, setAppropriateValue] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // تحميل البيانات من السجل عند فتح النموذج
   useEffect(() => {
     if (report) {
-      setCheckIn(report.checkIn ? report.checkIn.slice(11, 16) : '');
-      setCheckOut(report.checkOut ? report.checkOut.slice(11, 16) : '');
-      setAbsence(report.absence === 'نعم');
-      setAnnualLeave(report.annualLeave === 'نعم');
-      setMedicalLeave(report.medicalLeave === 'نعم');
-      setOfficialLeave(report.officialLeave === 'نعم');
-      setLeaveCompensation(report.leaveCompensation && report.leaveCompensation !== 'لا' && parseFloat(report.leaveCompensation) > 0);
+      setCheckIn(report.checkIn ? DateTime.fromISO(report.checkIn, { zone: 'Africa/Cairo' }).toFormat('HH:mm:ss') : '');
+      setCheckOut(report.checkOut ? DateTime.fromISO(report.checkOut, { zone: 'Africa/Cairo' }).toFormat('HH:mm:ss') : '');
+      setAbsence(report.absence === 'نعم' || report.absence === true);
+      setAnnualLeave(report.annualLeave === 'نعم' || report.annualLeave === true);
+      setMedicalLeave(report.medicalLeave === 'نعم' || report.medicalLeave === true);
+      setOfficialLeave(report.officialLeave === 'نعم' || report.officialLeave === true);
+      setLeaveCompensation(
+        report.leaveCompensation && report.leaveCompensation !== 'لا' && parseFloat(report.leaveCompensation) > 0
+      );
+      setAppropriateValue(
+        report.appropriateValue && report.appropriateValue !== 'لا' ? parseFloat(report.appropriateValue) : 0
+      );
       setError('');
     }
   }, [report]);
 
+  // تعطيل حقول الوقت عند اختيار إجازة سنوية
   useEffect(() => {
     if (annualLeave) {
       setCheckIn('');
@@ -34,23 +43,46 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
     }
   }, [annualLeave]);
 
-  if (!isOpen || !report) return null;
-
+  // إلغاء الحالات الأخرى عند اختيار حالة معينة
   const handleCheckboxChange = (field) => (e) => {
     const value = e.target.checked;
-    // تحديث الحالات مع التأكد من أن الحالة المحددة فقط تتغير
     setAbsence(field === 'absence' ? value : false);
     setAnnualLeave(field === 'annualLeave' ? value : false);
     setMedicalLeave(field === 'medicalLeave' ? value : false);
     setOfficialLeave(field === 'officialLeave' ? value : false);
     setLeaveCompensation(field === 'leaveCompensation' ? value : false);
+    setAppropriateValue(field === 'appropriateValue' && value ? 1 : 0);
   };
 
+  // التحقق من رصيد الإجازة السنوية
+  const checkAnnualLeaveBalance = async () => {
+    if (!annualLeave) return true;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/${report.code}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.annualLeaveBalance <= 0) {
+        setError('رصيد الإجازة السنوية غير كافٍ');
+        toast.error('رصيد الإجازة السنوية غير كافٍ');
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('Error checking annual leave balance:', err.response?.data || err.message);
+      setError('خطأ في التحقق من رصيد الإجازة السنوية');
+      toast.error('خطأ في التحقق من رصيد الإجازة السنوية');
+      return false;
+    }
+  };
+
+  // إرسال التعديلات
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
+    // التحقق من تنسيق الوقت
     const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/;
     if (!annualLeave && ((checkIn && !timeRegex.test(checkIn)) || (checkOut && !timeRegex.test(checkOut)))) {
       setError('تنسيق الوقت غير صالح، يجب أن يكون HH:mm أو HH:mm:ss');
@@ -59,9 +91,16 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
       return;
     }
 
-    if ([absence, annualLeave, medicalLeave, officialLeave, leaveCompensation].filter(Boolean).length > 1) {
-      setError('لا يمكن تحديد أكثر من حالة واحدة (غياب، إجازة سنوية، إجازة طبية، إجازة رسمية، بدل إجازة)');
+    // التحقق من الحالات الحصرية
+    if ([absence, annualLeave, medicalLeave, officialLeave, leaveCompensation, appropriateValue > 0].filter(Boolean).length > 1) {
+      setError('لا يمكن تحديد أكثر من حالة واحدة (غياب، إجازة سنوية، إجازة طبية، إجازة رسمية، بدل إجازة، قيمة مناسبة)');
       toast.error('لا يمكن تحديد أكثر من حالة واحدة');
+      setLoading(false);
+      return;
+    }
+
+    // التحقق من رصيد الإجازة السنوية
+    if (annualLeave && !(await checkAnnualLeaveBalance())) {
       setLoading(false);
       return;
     }
@@ -72,16 +111,30 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
         throw new Error('التوكن غير موجود، يرجى تسجيل الدخول');
       }
 
+      // تحويل التاريخ والوقت إلى تنسيق ISO
+      const date = DateTime.fromISO(report.date, { zone: 'Africa/Cairo' }).toISODate();
+      const checkInISO = annualLeave || absence || medicalLeave || officialLeave || leaveCompensation || appropriateValue > 0
+        ? null
+        : checkIn
+        ? DateTime.fromISO(`${report.date}T${checkIn}`, { zone: 'Africa/Cairo' }).toISO()
+        : null;
+      const checkOutISO = annualLeave || absence || medicalLeave || officialLeave || leaveCompensation || appropriateValue > 0
+        ? null
+        : checkOut
+        ? DateTime.fromISO(`${report.date}T${checkOut}`, { zone: 'Africa/Cairo' }).toISO()
+        : null;
+
       const payload = {
         code: report.code,
-        date: report.date,
-        checkIn: annualLeave ? null : (checkIn || null),
-        checkOut: annualLeave ? null : (checkOut || null),
+        date,
+        checkIn: checkInISO,
+        checkOut: checkOutISO,
         absence,
         annualLeave,
         medicalLeave,
         officialLeave,
         leaveCompensation,
+        appropriateValue,
       };
       console.log('Submitting payload:', payload);
 
@@ -95,7 +148,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
 
       console.log('Update response:', response.data);
       onUpdate(response.data.report);
-      toast.success('تم حفظ التعديلات بنجاح');
+      toast.success(response.data.message || 'تم حفظ التعديلات بنجاح');
       onClose();
     } catch (err) {
       console.error('Error saving report:', err.response?.data || err.message);
@@ -106,6 +159,8 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
       setLoading(false);
     }
   };
+
+  if (!isOpen || !report) return null;
 
   return (
     <motion.div
@@ -123,7 +178,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">تعديل السجل</h2>
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-right">تعديل سجل الحضور</h2>
         {error && (
           <motion.p
             initial={{ opacity: 0, y: -10 }}
@@ -172,7 +227,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
                 onChange={(e) => setCheckIn(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-right text-sm"
                 step="1"
-                disabled={loading || annualLeave}
+                disabled={loading || annualLeave || absence || medicalLeave || officialLeave || leaveCompensation || appropriateValue > 0}
               />
             </div>
             <div>
@@ -183,7 +238,7 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
                 onChange={(e) => setCheckOut(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-right text-sm"
                 step="1"
-                disabled={loading || annualLeave}
+                disabled={loading || annualLeave || absence || medicalLeave || officialLeave || leaveCompensation || appropriateValue > 0}
               />
             </div>
           </div>
@@ -238,7 +293,31 @@ const EditModal = ({ report, isOpen, onClose, onUpdate }) => {
                 disabled={loading}
               />
             </div>
+            <div className="flex items-center justify-end">
+              <label className="text-gray-700 text-sm font-medium mr-2">قيمة مناسبة</label>
+              <input
+                type="checkbox"
+                checked={appropriateValue > 0}
+                onChange={handleCheckboxChange('appropriateValue')}
+                className="h-4 w-4"
+                disabled={loading}
+              />
+            </div>
           </div>
+          {appropriateValue > 0 && (
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-1 text-right">القيمة المناسبة</label>
+              <input
+                type="number"
+                value={appropriateValue}
+                onChange={(e) => setAppropriateValue(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-2 border rounded-lg text-right text-sm"
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+            </div>
+          )}
           <div className="flex flex-wrap justify-end gap-2 sm:gap-4">
             <motion.button
               type="submit"

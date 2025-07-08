@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useContext, useEffect } from 'react';
 import { AuthContext } from './AuthProvider';
-import { HomeIcon, UserPlusIcon, UploadIcon, LogOutIcon, DollarSignIcon, SettingsIcon } from 'lucide-react';
+import { HomeIcon, UserPlusIcon, UploadIcon, LogOutIcon, DollarSignIcon, SettingsIcon, GiftIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 
@@ -43,7 +43,7 @@ const Navbar = () => {
     return (
       <div className="bg-white shadow-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-gray-600 text-right">جارٍ التحميل...</p>
+          <p className="text-gray-600 text-right">جاري التحميل...</p>
         </div>
       </div>
     );
@@ -53,7 +53,7 @@ const Navbar = () => {
     return (
       <div className="bg-white shadow-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-red-600 text-right">{error}</p>
+          <p className="text-red-500 text-right">{error}</p>
         </div>
       </div>
     );
@@ -75,7 +75,7 @@ const Navbar = () => {
           <div className="hidden sm:flex sm:items-center sm:space-x-4">
             <Link
               to="/dashboard"
-              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+              className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
             >
               <HomeIcon className="h-5 w-5" />
               <span>الرئيسية</span>
@@ -84,33 +84,40 @@ const Navbar = () => {
               <>
                 <Link
                   to="/create-account"
-                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                  className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
                 >
                   <UserPlusIcon className="h-5 w-5" />
                   <span>إنشاء حساب</span>
                 </Link>
                 <Link
+                  to="/upload-fingerprint"
+                  className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                >
+                  <UploadIcon className="h-5 w-5" />
+                  <span>رفع بصمة</span>
+                </Link>
+                <Link
                   to="/users/settings"
-                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                  className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
                 >
                   <SettingsIcon className="h-5 w-5" />
                   <span>إعدادات المستخدم</span>
                 </Link>
-                <Link
-                  to="/monthly-salary-report"
-                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
-                >
-                  <DollarSignIcon className="h-5 w-5" />
-                  <span>تقرير المرتب الشهري</span>
-                </Link>
               </>
             )}
             <Link
-              to="/upload-fingerprint"
-              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+              to="/monthly-salary-report"
+              className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
             >
-              <UploadIcon className="h-5 w-5" />
-              <span>رفع بصمة</span>
+              <DollarSignIcon className="h-5 w-5" />
+              <span>تقرير المرتب الشهري</span>
+            </Link>
+            <Link
+              to="/monthly-bonus-report"
+              className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+            >
+              <GiftIcon className="h-5 w-5" />
+              <span>تقرير الحافز الشهري</span>
             </Link>
             {user ? (
               <button
@@ -123,7 +130,7 @@ const Navbar = () => {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
+                className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 transform hover:scale-105"
               >
                 <span>تسجيل الدخول</span>
               </Link>
@@ -132,7 +139,7 @@ const Navbar = () => {
           <div className="flex items-center sm:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-lg text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
+              className="inline-flex items-center justify-center p-2 rounded-lg text-gray-800 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
               aria-label="Toggle menu"
             >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -156,7 +163,7 @@ const Navbar = () => {
           <div className="pt-2 pb-4 space-y-2 px-4">
             <Link
               to="/dashboard"
-              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+              className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
               onClick={() => setIsOpen(false)}
             >
               <HomeIcon className="h-5 w-5" />
@@ -166,37 +173,45 @@ const Navbar = () => {
               <>
                 <Link
                   to="/create-account"
-                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                  className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
                   onClick={() => setIsOpen(false)}
                 >
                   <UserPlusIcon className="h-5 w-5" />
                   <span>إنشاء حساب</span>
                 </Link>
                 <Link
+                  to="/upload-fingerprint"
+                  className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <UploadIcon className="h-5 w-5" />
+                  <span>رفع بصمة</span>
+                </Link>
+                <Link
                   to="/users/settings"
-                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                  className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
                   onClick={() => setIsOpen(false)}
                 >
                   <SettingsIcon className="h-5 w-5" />
                   <span>إعدادات المستخدم</span>
                 </Link>
-                <Link
-                  to="/monthly-salary-report"
-                  className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <DollarSignIcon className="h-5 w-5" />
-                  <span>تقرير المرتب الشهري</span>
-                </Link>
               </>
             )}
             <Link
-              to="/upload-fingerprint"
-              className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+              to="/monthly-salary-report"
+              className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
               onClick={() => setIsOpen(false)}
             >
-              <UploadIcon className="h-5 w-5" />
-              <span>رفع بصمة</span>
+              <DollarSignIcon className="h-5 w-5" />
+              <span>تقرير المرتب الشهري</span>
+            </Link>
+            <Link
+              to="/monthly-bonus-report"
+              className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+              onClick={() => setIsOpen(false)}
+            >
+              <GiftIcon className="h-5 w-5" />
+              <span>تقرير الحافز الشهري</span>
             </Link>
             {user ? (
               <button
@@ -209,7 +224,7 @@ const Navbar = () => {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
+                className="flex items-center space-x-2 text-gray-800 hover:text-blue-600 hover:bg-gray-100 block px-4 py-3 rounded-lg text-base font-medium transition-all duration-300"
                 onClick={() => setIsOpen(false)}
               >
                 <span>تسجيل الدخول</span>

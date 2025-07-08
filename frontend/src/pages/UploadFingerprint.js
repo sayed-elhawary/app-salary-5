@@ -6,64 +6,60 @@ import ReportTable from '../components/ReportTable';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { DateTime } from 'luxon';
+import { SettingsIcon } from 'lucide-react';
 
-// مكون مؤشر التحميل الأنيق
+// مكون مؤشر التحميل
 const LoadingSpinner = () => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50"
+    className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 backdrop-blur-sm"
   >
     <div className="relative">
       <motion.div
-        className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-t-transparent border-sky-400 rounded-full"
+        className="w-16 h-16 border-4 border-t-transparent border-teal-500 rounded-full"
         animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
       />
-      <span className="absolute inset-0 flex items-center justify-center text-gray-200 text-sm sm:text-base">
+      <span className="absolute inset-0 flex items-center justify-center text-teal-100 text-sm font-medium font-amiri">
         جارٍ التحميل...
       </span>
     </div>
   </motion.div>
 );
 
-// مكون علامة الصح المحسنة بتصميم جديد
-const SuccessCheckmark = () => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    transition={{ duration: 0.5 }}
-    className="fixed inset-0 bg-gradient-to-br from-gray-900/60 to-zinc-800/60 flex items-center justify-center z-50 pointer-events-none"
-  >
+// مكون علامة الصح
+const SuccessCheckmark = ({ onComplete }) => {
+  return (
     <motion.div
-      initial={{ scale: 0, rotate: -180 }}
-      animate={{ scale: 1, rotate: 360 }}
-      transition={{ type: 'spring', stiffness: 150, damping: 20, duration: 2 }}
-      className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-[12px] p-8 sm:p-10 w-32 h-32 sm:w-36 sm:h-36 flex items-center justify-center shadow-xl border border-teal-200/50"
-      style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} // شكل سداسي
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1, transition: { duration: 0.5 } }}
+      exit={{ opacity: 0, scale: 0.5 }}
+      onAnimationComplete={onComplete}
+      className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm"
     >
-      <svg
-        className="w-16 h-16 sm:w-18 sm:h-18 text-white"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        xmlns="http://www.w3.org/2000/svg"
+      <motion.div
+        animate={{
+          scale: [1, 1.1, 1],
+          transition: { duration: 1.5, repeat: Infinity, repeatType: 'loop' },
+        }}
+        className="bg-gradient-to-br from-teal-500 to-emerald-400 p-8 rounded-2xl shadow-2xl w-32 h-32 flex items-center justify-center"
       >
-        <motion.path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2.5"
-          d="M12 2l2 7h7l-5 4 2 7-6-4-6 4 2-7-5-4h7z" // رمز نجمة
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 1.5, ease: 'easeInOut' }}
-        />
-      </svg>
+        <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <motion.path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3"
+            d="M5 13l4 4L19 7"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1, transition: { duration: 0.8 } }}
+          />
+        </svg>
+      </motion.div>
     </motion.div>
-  </motion.div>
-);
+  );
+};
 
 const UploadFingerprint = () => {
   const { user } = useContext(AuthContext);
@@ -591,26 +587,14 @@ const UploadFingerprint = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col font-amiri">
       <NavBar />
-      <AnimatePresence>
-        {loading && <LoadingSpinner />}
-      </AnimatePresence>
-      <div className="container mx-auto p-4 sm:p-6 max-w-full">
-        {/* عرض رسالة الخطأ */}
-        {errorMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6 text-right text-sm sm:text-base"
-          >
-            {errorMessage}
-          </motion.div>
-        )}
-
-        {/* عرض علامة الصح عند النجاح */}
+      <div className="container mx-auto p-4 sm:p-6 max-w-7xl">
         <AnimatePresence>
-          {showSuccess && <SuccessCheckmark />}
+          {loading && <LoadingSpinner />}
+        </AnimatePresence>
+        <AnimatePresence>
+          {showSuccess && <SuccessCheckmark onComplete={() => setShowSuccess(false)} />}
         </AnimatePresence>
 
         {/* قسم رفع ملف البصمات */}
@@ -618,19 +602,31 @@ const UploadFingerprint = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-200 mb-4 sm:mb-6"
+          className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 mb-6"
         >
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">رفع ملف البصمات</h2>
-          <form onSubmit={handleUpload} className="space-y-4">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
+            <SettingsIcon className="h-7 w-7 text-blue-600" />
+            رفع ملف البصمات
+          </h2>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+            >
+              {errorMessage}
+            </motion.div>
+          )}
+          <form onSubmit={handleUpload} className="space-y-5">
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                 اختر ملف Excel
               </label>
               <input
                 type="file"
                 accept=".xlsx, .xls"
                 onChange={handleFileChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                 disabled={loading}
               />
             </div>
@@ -639,7 +635,7 @@ const UploadFingerprint = () => {
               disabled={loading || !file}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
+              className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading || !file ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -653,55 +649,67 @@ const UploadFingerprint = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-200 mb-4 sm:mb-6"
+          className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 mb-6"
         >
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">البحث في التقارير</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
+            <SettingsIcon className="h-7 w-7 text-blue-600" />
+            البحث في التقارير
+          </h2>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+            >
+              {errorMessage}
+            </motion.div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                 كود الموظف
               </label>
               <input
                 type="text"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                 placeholder="أدخل كود الموظف"
                 disabled={loading}
               />
             </div>
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                 من تاريخ
               </label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                 disabled={loading}
               />
             </div>
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                 إلى تاريخ
               </label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                 disabled={loading}
               />
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-2 sm:gap-4 mt-4">
+          <div className="flex flex-wrap justify-end gap-3 mt-6">
             <motion.button
               onClick={handleSearch}
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
+              className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -712,7 +720,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-zinc-600 text-white px-4 py-2 rounded-md hover:bg-zinc-700 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-zinc-600 ${
+              className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -723,7 +731,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-sky-600 ${
+              className={`w-full sm:w-auto bg-teal-600 text-white px-5 py-2.5 rounded-lg hover:bg-teal-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -734,7 +742,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-amber-500 text-white px-4 py-2 rounded-md hover:bg-amber-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-amber-500 ${
+              className={`w-full sm:w-auto bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -745,7 +753,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-cyan-600 text-white px-4 py-2 rounded-md hover:bg-cyan-700 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-cyan-600 ${
+              className={`w-full sm:w-auto bg-cyan-600 text-white px-5 py-2.5 rounded-lg hover:bg-cyan-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -756,7 +764,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-lime-500 text-white px-4 py-2 rounded-md hover:bg-lime-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-lime-500 ${
+              className={`w-full sm:w-auto bg-lime-600 text-white px-5 py-2.5 rounded-lg hover:bg-lime-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -767,7 +775,7 @@ const UploadFingerprint = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-red-800 text-white px-4 py-2 rounded-md hover:bg-red-900 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-red-800 ${
+              className={`w-full sm:w-auto bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700 transition-all duration-200 text-sm font-medium shadow-md ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -775,22 +783,22 @@ const UploadFingerprint = () => {
             </motion.button>
           </div>
           <div className="flex flex-wrap justify-end gap-4 mt-4">
-            <label className="flex items-center text-gray-700 text-sm font-medium">
+            <label className="flex items-center text-gray-600 text-sm font-medium">
               <input
                 type="checkbox"
                 checked={showSingleFingerprint}
                 onChange={() => setShowSingleFingerprint(!showSingleFingerprint)}
-                className="mr-2 accent-sky-600"
+                className="mr-2 accent-blue-600"
                 disabled={loading}
               />
               عرض البصمات الفردية فقط
             </label>
-            <label className="flex items-center text-gray-700 text-sm font-medium">
+            <label className="flex items-center text-gray-600 text-sm font-medium">
               <input
                 type="checkbox"
                 checked={showAbsenceDays}
                 onChange={() => setShowAbsenceDays(!showAbsenceDays)}
-                className="mr-2 accent-sky-600"
+                className="mr-2 accent-blue-600"
                 disabled={loading}
               />
               عرض أيام الغياب فقط
@@ -805,22 +813,34 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
             >
               <motion.div
-                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
+                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة إجازة رسمية</h2>
-                <form onSubmit={handleCreateOfficialLeave} className="space-y-4">
+                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                  إضافة إجازة رسمية
+                </h2>
+                {errorMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                  >
+                    {errorMessage}
+                  </motion.div>
+                )}
+                <form onSubmit={handleCreateOfficialLeave} className="space-y-5">
                   <div>
-                    <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
                         type="checkbox"
                         name="applyToAll"
                         checked={officialLeaveDetails.applyToAll}
                         onChange={handleOfficialLeaveChange}
-                        className="mr-2 accent-sky-600"
+                        className="mr-2 accent-blue-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -828,7 +848,7 @@ const UploadFingerprint = () => {
                   </div>
                   {!officialLeaveDetails.applyToAll && (
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                      <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                         كود الموظف
                       </label>
                       <input
@@ -836,7 +856,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={officialLeaveDetails.code}
                         onChange={handleOfficialLeaveChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -844,7 +864,7 @@ const UploadFingerprint = () => {
                     </div>
                   )}
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       من تاريخ
                     </label>
                     <input
@@ -852,13 +872,13 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={officialLeaveDetails.dateFrom}
                       onChange={handleOfficialLeaveChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       إلى تاريخ
                     </label>
                     <input
@@ -866,18 +886,18 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={officialLeaveDetails.dateTo}
                       onChange={handleOfficialLeaveChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2 sm:gap-4">
+                  <div className="flex flex-wrap justify-end gap-3">
                     <motion.button
                       type="submit"
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
+                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -889,7 +909,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
+                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -909,22 +929,34 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
             >
               <motion.div
-                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
+                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة بدل إجازة</h2>
-                <form onSubmit={handleCreateLeaveCompensation} className="space-y-4">
+                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                  إضافة بدل إجازة
+                </h2>
+                {errorMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                  >
+                    {errorMessage}
+                  </motion.div>
+                )}
+                <form onSubmit={handleCreateLeaveCompensation} className="space-y-5">
                   <div>
-                    <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
                         type="checkbox"
                         name="applyToAll"
                         checked={leaveCompensationDetails.applyToAll}
                         onChange={handleLeaveCompensationChange}
-                        className="mr-2 accent-sky-600"
+                        className="mr-2 accent-blue-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -932,7 +964,7 @@ const UploadFingerprint = () => {
                   </div>
                   {!leaveCompensationDetails.applyToAll && (
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                      <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                         كود الموظف
                       </label>
                       <input
@@ -940,7 +972,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={leaveCompensationDetails.code}
                         onChange={handleLeaveCompensationChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -948,7 +980,7 @@ const UploadFingerprint = () => {
                     </div>
                   )}
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       من تاريخ
                     </label>
                     <input
@@ -956,13 +988,13 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={leaveCompensationDetails.dateFrom}
                       onChange={handleLeaveCompensationChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       إلى تاريخ
                     </label>
                     <input
@@ -970,18 +1002,18 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={leaveCompensationDetails.dateTo}
                       onChange={handleLeaveCompensationChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2 sm:gap-4">
+                  <div className="flex flex-wrap justify-end gap-3">
                     <motion.button
                       type="submit"
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
+                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -993,7 +1025,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
+                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1013,22 +1045,34 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
             >
               <motion.div
-                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
+                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة إجازة طبية</h2>
-                <form onSubmit={handleCreateMedicalLeave} className="space-y-4">
+                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                  إضافة إجازة طبية
+                </h2>
+                {errorMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                  >
+                    {errorMessage}
+                  </motion.div>
+                )}
+                <form onSubmit={handleCreateMedicalLeave} className="space-y-5">
                   <div>
-                    <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
                         type="checkbox"
                         name="applyToAll"
                         checked={medicalLeaveDetails.applyToAll}
                         onChange={handleMedicalLeaveChange}
-                        className="mr-2 accent-sky-600"
+                        className="mr-2 accent-blue-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -1036,7 +1080,7 @@ const UploadFingerprint = () => {
                   </div>
                   {!medicalLeaveDetails.applyToAll && (
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                      <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                         كود الموظف
                       </label>
                       <input
@@ -1044,7 +1088,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={medicalLeaveDetails.code}
                         onChange={handleMedicalLeaveChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -1052,7 +1096,7 @@ const UploadFingerprint = () => {
                     </div>
                   )}
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       من تاريخ
                     </label>
                     <input
@@ -1060,13 +1104,13 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={medicalLeaveDetails.dateFrom}
                       onChange={handleMedicalLeaveChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       إلى تاريخ
                     </label>
                     <input
@@ -1074,18 +1118,18 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={medicalLeaveDetails.dateTo}
                       onChange={handleMedicalLeaveChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2 sm:gap-4">
+                  <div className="flex flex-wrap justify-end gap-3">
                     <motion.button
                       type="submit"
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
+                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1097,7 +1141,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
+                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1117,22 +1161,34 @@ const UploadFingerprint = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
             >
               <motion.div
-                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-md"
+                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">إضافة إجازة سنوية</h2>
-                <form onSubmit={handleCreateAnnualLeave} className="space-y-4">
+                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                  إضافة إجازة سنوية
+                </h2>
+                {errorMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                  >
+                    {errorMessage}
+                  </motion.div>
+                )}
+                <form onSubmit={handleCreateAnnualLeave} className="space-y-5">
                   <div>
-                    <label className="flex items-center text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
                         type="checkbox"
                         name="applyToAll"
                         checked={annualLeaveDetails.applyToAll}
                         onChange={handleAnnualLeaveChange}
-                        className="mr-2 accent-sky-600"
+                        className="mr-2 accent-blue-600"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -1140,7 +1196,7 @@ const UploadFingerprint = () => {
                   </div>
                   {!annualLeaveDetails.applyToAll && (
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                      <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                         كود الموظف
                       </label>
                       <input
@@ -1148,7 +1204,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={annualLeaveDetails.code}
                         onChange={handleAnnualLeaveChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -1156,7 +1212,7 @@ const UploadFingerprint = () => {
                     </div>
                   )}
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       من تاريخ
                     </label>
                     <input
@@ -1164,13 +1220,13 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={annualLeaveDetails.dateFrom}
                       onChange={handleAnnualLeaveChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       إلى تاريخ
                     </label>
                     <input
@@ -1178,18 +1234,18 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={annualLeaveDetails.dateTo}
                       onChange={handleAnnualLeaveChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-sky-300"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
                       required
                       disabled={loading}
                     />
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2 sm:gap-4">
+                  <div className="flex flex-wrap justify-end gap-3">
                     <motion.button
                       type="submit"
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-stone-700 text-white px-4 py-2 rounded-md hover:bg-stone-800 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-stone-700 ${
+                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1201,7 +1257,7 @@ const UploadFingerprint = () => {
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm sm:text-base shadow-sm ring-1 ring-offset-1 ring-gray-500 ${
+                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1220,68 +1276,13 @@ const UploadFingerprint = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-200 mb-4 sm:mb-6"
+            className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100"
           >
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right">التقارير</h2>
-            <div className="overflow-x-auto">
+            <h2 className="text-xl font-bold text-gray-800 mb-6 text-right">
+              التقارير
+            </h2>
+            <div className="overflow-x-auto max-h-[60vh] rounded-lg shadow-sm">
               <ReportTable reports={filteredReports} onEdit={handleEditReport} />
-            </div>
-            <div className="mt-6 text-right">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">إجماليات الفترة</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg shadow-inner">
-                <div className="bg-sky-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي ساعات العمل</p>
-                  <p className="text-sm sm:text-lg font-bold text-sky-700">{totals.totalWorkHours} ساعة</p>
-                </div>
-                <div className="bg-emerald-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام العمل</p>
-                  <p className="text-sm sm:text-lg font-bold text-emerald-700">{totals.totalWorkDays} يوم</p>
-                </div>
-                <div className="bg-red-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الغياب</p>
-                  <p className="text-sm sm:text-lg font-bold text-red-700">{totals.totalAbsenceDays} يوم</p>
-                </div>
-                <div className="bg-amber-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام التأخير</p>
-                  <p className="text-sm sm:text-lg font-bold text-amber-700">{totals.totalLateDays} يوم</p>
-                </div>
-                <div className="bg-yellow-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الخصومات</p>
-                  <p className="text-sm sm:text-lg font-bold text-yellow-700">{totals.totalDeductions} يوم</p>
-                </div>
-                <div className="bg-purple-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي الساعات الإضافية</p>
-                  <p className="text-sm sm:text-lg font-bold text-purple-700">{totals.totalOvertime} ساعة</p>
-                </div>
-                <div className="bg-zinc-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الأسبوعية</p>
-                  <p className="text-sm sm:text-lg font-bold text-zinc-700">{totals.totalWeeklyLeaveDays} يوم</p>
-                </div>
-                <div className="bg-lime-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة السنوية</p>
-                  <p className="text-sm sm:text-lg font-bold text-lime-700">{totals.totalAnnualLeaveDays} يوم</p>
-                </div>
-                <div className="bg-cyan-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الطبية</p>
-                  <p className="text-sm sm:text-lg font-bold text-cyan-700">{totals.totalMedicalLeaveDays} يوم</p>
-                </div>
-                <div className="bg-teal-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام الإجازة الرسمية</p>
-                  <p className="text-sm sm:text-lg font-bold text-teal-700">{totals.totalOfficialLeaveDays} يوم</p>
-                </div>
-                <div className="bg-amber-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي أيام بدل الإجازة</p>
-                  <p className="text-sm sm:text-lg font-bold text-amber-700">{totals.totalLeaveCompensationDays} يوم</p>
-                </div>
-                <div className="bg-lime-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">إجمالي قيمة بدل الإجازة</p>
-                  <p className="text-sm sm:text-lg font-bold text-lime-700">{totals.totalLeaveCompensationValue} جنيه</p>
-                </div>
-                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600">رصيد الإجازات السنوية</p>
-                  <p className="text-sm sm:text-lg font-bold text-gray-700">{totals.annualLeaveBalance} يوم</p>
-                </div>
-              </div>
             </div>
           </motion.div>
         )}

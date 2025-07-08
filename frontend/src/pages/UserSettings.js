@@ -6,6 +6,37 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { SettingsIcon } from 'lucide-react';
 
+const SuccessCheckmark = ({ onComplete }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1, transition: { duration: 0.5 } }}
+      exit={{ opacity: 0, scale: 0.5 }}
+      onAnimationComplete={onComplete}
+      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+    >
+      <motion.div
+        animate={{
+          scale: [1, 1.1, 1],
+          transition: { duration: 1.5, repeat: Infinity, repeatType: 'loop' },
+        }}
+        className="bg-gradient-to-br from-green-400 to-emerald-300 p-8 rounded-full shadow-lg w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center"
+      >
+        <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <motion.path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3"
+            d="M5 13l4 4L19 7"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1, transition: { duration: 0.8 } }}
+          />
+        </svg>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const UserSettings = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -15,7 +46,7 @@ const UserSettings = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -26,12 +57,10 @@ const UserSettings = () => {
   const handleSearch = async () => {
     if (!searchCode) {
       setError('يرجى إدخال كود الموظف');
-      setSuccess('');
       return;
     }
 
     setError('');
-    setSuccess('');
     setLoading(true);
     try {
       const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/users`, {
@@ -51,7 +80,6 @@ const UserSettings = () => {
   const handleShowAll = async () => {
     setLoading(true);
     setError('');
-    setSuccess('');
     try {
       const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -81,7 +109,6 @@ const UserSettings = () => {
       advances: userData.advances || '0.00',
     });
     setError('');
-    setSuccess('');
   };
 
   const handleEditChange = (e) => {
@@ -93,7 +120,6 @@ const UserSettings = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setSuccess('');
     try {
       if (parseFloat(editForm.baseSalary) < 0) {
         setError('الراتب الأساسي لا يمكن أن يكون سالبًا');
@@ -163,7 +189,8 @@ const UserSettings = () => {
       );
 
       setEditingUser(null);
-      setSuccess('تم حفظ التعديلات بنجاح');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
     } catch (err) {
       console.error('Error updating user:', err.response?.data?.message || err.message);
       setError(`خطأ أثناء التعديل: ${err.response?.data?.message || err.message}`);
@@ -176,7 +203,6 @@ const UserSettings = () => {
     setEditingUser(null);
     setEditForm({});
     setError('');
-    setSuccess('');
   };
 
   if (!user || user.role !== 'admin') return null;
@@ -184,14 +210,14 @@ const UserSettings = () => {
   return (
     <div className="min-h-screen bg-white">
       <NavBar />
-      <div className="container mx-auto p-4 sm:p-6">
+      <div className="container mx-auto p-4 sm:p-6 max-w-md md:max-w-4xl">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 mb-6"
+          className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-100 mb-6"
         >
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
             <SettingsIcon className="h-6 w-6 text-blue-500" />
             إعدادات المستخدم
           </h2>
@@ -199,30 +225,21 @@ const UserSettings = () => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm"
+              className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-right text-sm md:text-base"
             >
               {error}
             </motion.div>
           )}
-          {success && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-green-100 text-green-700 p-3 rounded-md mb-4 text-right text-sm"
-            >
-              {success}
-            </motion.div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                 كود الموظف
               </label>
               <input
                 type="text"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                 placeholder="أدخل كود الموظف"
               />
             </div>
@@ -232,7 +249,7 @@ const UserSettings = () => {
                 disabled={loading}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className={`bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors duration-300 text-sm ${
+                className={`bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition-colors duration-300 text-sm md:text-base ${
                   loading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -243,7 +260,7 @@ const UserSettings = () => {
                 disabled={loading}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className={`bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600 transition-colors duration-300 text-sm ${
+                className={`bg-purple-500 text-white px-4 py-3 rounded-lg hover:bg-purple-600 transition-colors duration-300 text-sm md:text-base ${
                   loading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -262,10 +279,10 @@ const UserSettings = () => {
               className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg w-full max-w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto"
+                className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md md:max-w-4xl max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
                   <SettingsIcon className="h-6 w-6 text-blue-500" />
                   تعديل بيانات المستخدم
                 </h2>
@@ -273,23 +290,14 @@ const UserSettings = () => {
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-right text-sm"
+                    className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-right text-sm md:text-base"
                   >
                     {error}
                   </motion.div>
                 )}
-                {success && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-green-100 text-green-700 p-3 rounded-md mb-4 text-right text-sm"
-                  >
-                    {success}
-                  </motion.div>
-                )}
-                <form onSubmit={handleEditSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <form onSubmit={handleEditSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       كود الموظف
                     </label>
                     <input
@@ -297,13 +305,13 @@ const UserSettings = () => {
                       name="code"
                       value={editForm.code}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       required
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       الاسم الكامل
                     </label>
                     <input
@@ -311,12 +319,12 @@ const UserSettings = () => {
                       name="employeeName"
                       value={editForm.employeeName}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       القسم
                     </label>
                     <input
@@ -324,12 +332,12 @@ const UserSettings = () => {
                       name="department"
                       value={editForm.department}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       الراتب الأساسي
                     </label>
                     <input
@@ -337,14 +345,14 @@ const UserSettings = () => {
                       name="baseSalary"
                       value={editForm.baseSalary}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       required
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       التأمين الطبي
                     </label>
                     <input
@@ -352,13 +360,13 @@ const UserSettings = () => {
                       name="medicalInsurance"
                       value={editForm.medicalInsurance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       التأمين الاجتماعي
                     </label>
                     <input
@@ -366,13 +374,13 @@ const UserSettings = () => {
                       name="socialInsurance"
                       value={editForm.socialInsurance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       رصيد الإجازة السنوية
                     </label>
                     <input
@@ -380,12 +388,12 @@ const UserSettings = () => {
                       name="annualLeaveBalance"
                       value={editForm.annualLeaveBalance}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       min="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       العيدية
                     </label>
                     <input
@@ -393,13 +401,13 @@ const UserSettings = () => {
                       name="eidBonus"
                       value={editForm.eidBonus}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
                       السلف
                     </label>
                     <input
@@ -407,18 +415,18 @@ const UserSettings = () => {
                       name="advances"
                       value={editForm.advances}
                       onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
                       min="0"
                       step="0.01"
                     />
                   </div>
-                  <div className="sm:col-span-2 flex justify-end gap-4">
+                  <div className="md:col-span-2 flex justify-end gap-4">
                     <motion.button
                       type="submit"
                       disabled={loading}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors duration-300 text-sm ${
+                      className={`bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition-colors duration-300 text-sm md:text-base ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -429,7 +437,7 @@ const UserSettings = () => {
                       onClick={handleEditCancel}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors duration-300 text-sm"
+                      className="bg-gray-500 text-white px-4 py-3 rounded-lg hover:bg-gray-600 transition-colors duration-300 text-sm md:text-base"
                     >
                       إلغاء
                     </motion.button>
@@ -440,14 +448,18 @@ const UserSettings = () => {
           )}
         </AnimatePresence>
 
+        <AnimatePresence>
+          {showSuccess && <SuccessCheckmark onComplete={() => setShowSuccess(false)} />}
+        </AnimatePresence>
+
         {users.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100"
+            className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-100"
           >
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
               <SettingsIcon className="h-6 w-6 text-blue-500" />
               قائمة المستخدمين
             </h2>
@@ -455,34 +467,34 @@ const UserSettings = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       كود الموظف
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       الاسم
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       القسم
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       الراتب الأساسي
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       التأمين الطبي
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       التأمين الاجتماعي
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       رصيد الإجازة السنوية
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       العيدية
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       السلف
                     </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
                       إجراءات
                     </th>
                   </tr>
@@ -490,21 +502,21 @@ const UserSettings = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {users.map((userData, index) => (
                     <tr key={index}>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{userData.code}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{userData.employeeName}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{userData.department}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(userData.baseSalary || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(userData.medicalInsurance || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(userData.socialInsurance || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseInt(userData.annualLeaveBalance || 21, 10)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(userData.eidBonus || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">{parseFloat(userData.advances || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{userData.code}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{userData.employeeName}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{userData.department}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.baseSalary || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.medicalInsurance || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.socialInsurance || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseInt(userData.annualLeaveBalance || 21, 10)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.eidBonus || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.advances || 0).toFixed(2)}</td>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">
                         <motion.button
                           onClick={() => handleEditClick(userData)}
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          className="bg-yellow-500 text-white px-3 py-1 rounded-md hover:bg-yellow-600 transition-colors duration-300 text-xs sm:text-sm"
+                          className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors duration-300 text-xs md:text-sm"
                         >
                           تعديل
                         </motion.button>
@@ -521,9 +533,9 @@ const UserSettings = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-gray-100 text-center"
+            className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-100 text-center"
           >
-            <p className="text-gray-700 text-sm sm:text-base">لا توجد بيانات مستخدمين متاحة. يرجى البحث أو عرض جميع المستخدمين.</p>
+            <p className="text-gray-700 text-sm md:text-base">لا توجد بيانات مستخدمين متاحة. يرجى البحث أو عرض جميع المستخدمين.</p>
           </motion.div>
         )}
 

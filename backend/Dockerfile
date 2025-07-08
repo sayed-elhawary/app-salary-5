@@ -17,7 +17,6 @@ RUN mkdir -p /app/Uploads
 VOLUME /app/Uploads
 
 # تعيين المنفذ
-EXPOSE 3000
 
 # أمر تشغيل التطبيق
 CMD ["npm", "start"]

@@ -1,7 +1,7 @@
+import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { useContext } from 'react';
 import { AuthContext } from '../components/AuthProvider';
-import { UserPlusIcon, UploadIcon, DollarSignIcon, SettingsIcon } from 'lucide-react';
+import { HomeIcon, UserPlusIcon, UploadIcon, DollarSignIcon, SettingsIcon, GiftIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const containerVariants = {
@@ -79,59 +79,69 @@ const Dashboard = () => {
           animate="visible"
         >
           {user?.role === 'admin' && (
-            <motion.div variants={cardVariants} whileHover="hover">
-              <Link
-                to="/create-account"
-                className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
-              >
-                <UserPlusIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800">إنشاء حساب</h2>
-                  <p className="text-gray-500 mt-1 text-sm">إضافة موظف جديد إلى النظام</p>
-                </div>
-              </Link>
-            </motion.div>
+            <>
+              <motion.div variants={cardVariants} whileHover="hover">
+                <Link
+                  to="/create-account"
+                  className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+                >
+                  <UserPlusIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-800">إنشاء حساب</h2>
+                    <p className="text-gray-500 mt-1 text-sm">إضافة موظف جديد إلى النظام</p>
+                  </div>
+                </Link>
+              </motion.div>
+              <motion.div variants={cardVariants} whileHover="hover">
+                <Link
+                  to="/upload-fingerprint"
+                  className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+                >
+                  <UploadIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-800">رفع بصمة</h2>
+                    <p className="text-gray-500 mt-1 text-sm">رفع ملف بصمة الموظفين</p>
+                  </div>
+                </Link>
+              </motion.div>
+              <motion.div variants={cardVariants} whileHover="hover">
+                <Link
+                  to="/users/settings"
+                  className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+                >
+                  <SettingsIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-800">إعدادات المستخدم</h2>
+                    <p className="text-gray-500 mt-1 text-sm">تعديل إعدادات حسابات الموظفين</p>
+                  </div>
+                </Link>
+              </motion.div>
+            </>
           )}
           <motion.div variants={cardVariants} whileHover="hover">
             <Link
-              to="/upload-fingerprint"
+              to="/monthly-salary-report"
               className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
             >
-              <UploadIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+              <DollarSignIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
               <div>
-                <h2 className="text-xl font-semibold text-gray-800">رفع بصمة</h2>
-                <p className="text-gray-500 mt-1 text-sm">رفع ملف بصمة الموظفين</p>
+                <h2 className="text-xl font-semibold text-gray-800">تقرير المرتب الشهري</h2>
+                <p className="text-gray-500 mt-1 text-sm">عرض تقرير المرتبات الشهرية للموظفين</p>
               </div>
             </Link>
           </motion.div>
-          {user?.role === 'admin' && (
-            <motion.div variants={cardVariants} whileHover="hover">
-              <Link
-                to="/users/settings"
-                className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
-              >
-                <SettingsIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800">إعدادات المستخدم</h2>
-                  <p className="text-gray-500 mt-1 text-sm">تعديل إعدادات حسابات الموظفين</p>
-                </div>
-              </Link>
-            </motion.div>
-          )}
-          {user?.role === 'admin' && (
-            <motion.div variants={cardVariants} whileHover="hover">
-              <Link
-                to="/monthly-salary-report"
-                className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
-              >
-                <DollarSignIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800">تقرير المرتب الشهري</h2>
-                  <p className="text-gray-500 mt-1 text-sm">عرض تقرير المرتبات الشهرية للموظفين</p>
-                </div>
-              </Link>
-            </motion.div>
-          )}
+          <motion.div variants={cardVariants} whileHover="hover">
+            <Link
+              to="/monthly-bonus-report"
+              className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+            >
+              <GiftIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800">تقرير الحافز الشهري</h2>
+                <p className="text-gray-500 mt-1 text-sm">عرض تقرير الحوافز الشهرية للموظفين</p>
+              </div>
+            </Link>
+          </motion.div>
         </motion.div>
       </div>
     </div>
