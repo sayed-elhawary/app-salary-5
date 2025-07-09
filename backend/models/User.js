@@ -153,9 +153,11 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ code: 1 });
 userSchema.index({ fullName: 1 });
+userSchema.index({ status: 1 });
 
 userSchema.pre('save', async function (next) {
   try {
+    console.log(`Attempting to save user ${this.code}:`, this.toObject());
     if (this.isModified('password')) {
       const salt = await bcrypt.genSalt(10);
       this.password = await bcrypt.hash(this.password, salt);
@@ -163,9 +165,6 @@ userSchema.pre('save', async function (next) {
     }
 
     const now = DateTime.now().setZone('Africa/Cairo');
-    const lastReset = this.lastResetDate
-      ? DateTime.fromJSDate(this.lastResetDate, { zone: 'Africa/Cairo' })
-      : now;
     const lastAnnualReset = this.lastAnnualLeaveResetDate
       ? DateTime.fromJSDate(this.lastAnnualLeaveResetDate, { zone: 'Africa/Cairo' })
       : now;
@@ -174,25 +173,37 @@ userSchema.pre('save', async function (next) {
       this.customAnnualLeave = Math.min(this.annualLeaveBalance || 21, 7);
       this.annualLeaveBalance = 21;
       this.lastAnnualLeaveResetDate = now.startOf('year').toJSDate();
-      console.log(`Reset annualLeaveBalance to 21 and set customAnnualLeave to ${this.customAnnualLeave} for user ${this.code} on ${this.lastAnnualLeaveResetDate}`);
-    }
-
-    if (now.month !== lastReset.month || now.year !== lastReset.year) {
-      this.monthlyLateAllowance = 120;
-      this.lastResetDate = now.startOf('month').toJSDate();
-      console.log(`Reset monthlyLateAllowance for user ${this.code} to 120 on ${this.lastResetDate}`);
+      console.log(
+        `Reset annualLeaveBalance to 21 and set customAnnualLeave to ${this.customAnnualLeave} for user ${this.code} on ${this.lastAnnualLeaveResetDate}`
+      );
     }
 
     if (this.isModified('violationsInstallment')) {
-      console.log(`Updating violationsInstallment for user ${this.code}: Previous=${this.get('violationsInstallment', null, { getters: false })}, New=${this.violationsInstallment}`);
+      console.log(
+        `Updating violationsInstallment for user ${this.code}: Previous=${this.get(
+          'violationsInstallment',
+          null,
+          { getters: false }
+        )}, New=${this.violationsInstallment}`
+      );
     }
 
     if (this.isModified('advances')) {
-      console.log(`Updating advances for user ${this.code}: Previous=${this.get('advances', null, { getters: false })}, New=${this.advances}`);
+      console.log(
+        `Updating advances for user ${this.code}: Previous=${this.get('advances', null, { getters: false })}, New=${
+          this.advances
+        }`
+      );
     }
 
     if (this.isModified('totalOfficialLeaveDays')) {
-      console.log(`Updating totalOfficialLeaveDays for user ${this.code}: Previous=${this.get('totalOfficialLeaveDays', null, { getters: false })}, New=${this.totalOfficialLeaveDays}`);
+      console.log(
+        `Updating totalOfficialLeaveDays for user ${this.code}: Previous=${this.get(
+          'totalOfficialLeaveDays',
+          null,
+          { getters: false }
+        )}, New=${this.totalOfficialLeaveDays}`
+      );
     }
 
     if (this.isModified('annualLeaveBalance')) {
@@ -200,12 +211,19 @@ userSchema.pre('save', async function (next) {
     }
 
     if (this.isModified('customAnnualLeave')) {
-      console.log(`Updating customAnnualLeave for user ${this.code}: Previous=${this.get('customAnnualLeave', null, { getters: false })}, New=${this.customAnnualLeave}`);
+      console.log(
+        `Updating customAnnualLeave for user ${this.code}: Previous=${this.get(
+          'customAnnualLeave',
+          null,
+          { getters: false }
+        )}, New=${this.customAnnualLeave}`
+      );
     }
 
+    console.log(`Saved user ${this.code}:`, this.toObject());
     next();
   } catch (err) {
-    console.error(`Error in pre-save middleware for user ${this.code}:`, err.message);
+    console.error(`Error in pre-save middleware for user ${this.code}:`, err.message, err.stack);
     next(err);
   }
 });
@@ -226,12 +244,14 @@ userSchema.virtual('netSalary').get(async function () {
 
     const totals = fingerprints.reduce(
       (acc, report) => {
-        const isWorkDay = !report.absence &&
-                          !report.annualLeave &&
-                          !report.medicalLeave &&
-                          !report.officialLeave &&
-                          report.leaveCompensation === 0 &&
-                          !isWeeklyLeaveDay(report.date, this.workDaysPerWeek);
+        const isWorkDay =
+          !report.absence &&
+          !report.annualLeave &&
+          !report.medicalLeave &&
+          !report.officialLeave &&
+          report.leaveCompensation === 0 &&
+          report.appropriateValue === 0 &&
+          !isWeeklyLeaveDay(report.date, this.workDaysPerWeek);
         acc.totalWorkHours += report.workHours || 0;
         acc.totalWorkDays += isWorkDay ? 1 : 0;
         acc.totalAbsenceDays += report.absence ? 1 : 0;
@@ -245,6 +265,8 @@ userSchema.virtual('netSalary').get(async function () {
         acc.totalOfficialLeaveDays += report.officialLeave ? 1 : 0;
         acc.totalLeaveCompensationDays += report.leaveCompensation > 0 ? 1 : 0;
         acc.totalLeaveCompensationValue += report.leaveCompensation || 0;
+        acc.totalAppropriateValueDays += report.appropriateValue > 0 ? 1 : 0;
+        acc.totalAppropriateValue += report.appropriateValue || 0;
         return acc;
       },
       {
@@ -261,6 +283,8 @@ userSchema.virtual('netSalary').get(async function () {
         totalOfficialLeaveDays: 0,
         totalLeaveCompensationDays: 0,
         totalLeaveCompensationValue: 0,
+        totalAppropriateValueDays: 0,
+        totalAppropriateValue: 0,
       }
     );
 
@@ -268,9 +292,25 @@ userSchema.virtual('netSalary').get(async function () {
     const hourlyRate = dailySalary / 9;
     const overtimeValue = totals.totalOvertime * hourlyRate;
     const baseMealAllowance = this.mealAllowance;
-    const mealAllowance = baseMealAllowance - (totals.totalAbsenceDays + totals.totalAnnualLeaveDays + totals.totalMedicalLeaveDays + totals.totalOfficialLeaveDays) * 50;
+    const mealAllowance =
+      baseMealAllowance -
+      (totals.totalAbsenceDays +
+        totals.totalAnnualLeaveDays +
+        totals.totalMedicalLeaveDays +
+        totals.totalOfficialLeaveDays +
+        totals.totalLeaveCompensationDays +
+        totals.totalAppropriateValueDays) *
+        50;
     const bonus = this.baseBonus * (this.bonusPercentage / 100);
-    const deductionsValue = (totals.totalAbsenceDays + totals.lateDeductionDays + totals.earlyLeaveDeductionDays + totals.medicalLeaveDeductionDays) * dailySalary + this.penaltiesValue + this.violationsInstallment + this.advances;
+    const deductionsValue =
+      (totals.totalAbsenceDays +
+        totals.lateDeductionDays +
+        totals.earlyLeaveDeductionDays +
+        totals.medicalLeaveDeductionDays) *
+        dailySalary +
+      this.penaltiesValue +
+      this.violationsInstallment +
+      this.advances;
 
     const netSalary = (
       this.baseSalary +
@@ -278,19 +318,24 @@ userSchema.virtual('netSalary').get(async function () {
       overtimeValue +
       bonus +
       this.eidBonus +
-      totals.totalLeaveCompensationValue -
+      totals.totalLeaveCompensationValue +
+      totals.totalAppropriateValue -
       this.medicalInsurance -
       this.socialInsurance -
       deductionsValue
     ).toFixed(2);
 
-    console.log(`Calculated netSalary for ${this.code}: ${netSalary}, deductionsValue: ${deductionsValue}, violationsInstallment: ${this.violationsInstallment}, advances: ${this.advances}, leaveCompensationValue: ${totals.totalLeaveCompensationValue}`);
+    console.log(
+      `Calculated netSalary for ${this.code}: ${netSalary}, deductionsValue: ${deductionsValue}, ` +
+        `violationsInstallment: ${this.violationsInstallment}, advances: ${this.advances}, ` +
+        `leaveCompensationValue: ${totals.totalLeaveCompensationValue}, appropriateValue: ${totals.totalAppropriateValue}`
+    );
     return {
       netSalary: parseFloat(netSalary),
       employeeName: this.fullName,
     };
   } catch (error) {
-    console.error(`Error calculating netSalary for user ${this.code}:`, error.message);
+    console.error(`Error calculating netSalary for user ${this.code}:`, error.message, error.stack);
     return { netSalary: 0, employeeName: this.fullName };
   }
 });
@@ -301,12 +346,6 @@ userSchema.methods.toJSON = function () {
   delete obj.fullName;
   delete obj.password;
   return obj;
-};
-
-const isWeeklyLeaveDay = (date, workDaysPerWeek) => {
-  const dayOfWeek = DateTime.fromJSDate(date, { zone: 'Africa/Cairo' }).weekday;
-  return (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
-         (workDaysPerWeek === 6 && dayOfWeek === 5);
 };
 
 const User = mongoose.models.User || mongoose.model('User', userSchema);

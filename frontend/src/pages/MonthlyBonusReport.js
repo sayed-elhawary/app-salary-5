@@ -15,19 +15,19 @@ const SuccessCheckmark = ({ onComplete }) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.5 }}
-      animate={{ opacity: 1, scale: 1, transition: { duration: 0.5 } }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.5 }}
       onAnimationComplete={onComplete}
-      className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center z-50"
     >
       <motion.div
         animate={{
           scale: [1, 1.1, 1],
           transition: { duration: 1.5, repeat: Infinity, repeatType: 'loop' },
         }}
-        className="bg-gradient-to-br from-teal-500 to-emerald-400 p-8 rounded-2xl shadow-2xl w-32 h-32 flex items-center justify-center"
+        className="relative w-20 h-20"
       >
-        <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-full h-full text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <motion.path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -48,18 +48,29 @@ const LoadingSpinner = () => (
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 backdrop-blur-sm"
+    className="fixed inset-0 flex items-center justify-center z-50"
   >
-    <div className="relative">
-      <motion.div
-        className="w-16 h-16 border-4 border-t-transparent border-teal-500 rounded-full"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-      />
-      <span className="absolute inset-0 flex items-center justify-center text-teal-100 text-sm font-medium font-amiri">
-        جارٍ التحميل...
+    <motion.div
+      className="relative flex items-center justify-center"
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+    >
+      <svg className="w-16 h-16" viewBox="0 0 50 50">
+        <motion.circle
+          cx="25"
+          cy="25"
+          r="20"
+          fill="none"
+          stroke="#06b6d4"
+          strokeWidth="4"
+          strokeDasharray="80 200"
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="absolute text-sm font-medium text-teal-600 font-amiri">
+        جارٍ التحميل
       </span>
-    </div>
+    </motion.div>
   </motion.div>
 );
 
@@ -86,7 +97,7 @@ const MonthlyBonusReport = () => {
 
   const triggerSuccessAnimation = () => {
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    setTimeout(() => setShowSuccess(false), 2000);
   };
 
   const calculateNetBonus = (user, absences, tieUpValue, productionValue, advances, deductions) => {
@@ -681,9 +692,9 @@ const MonthlyBonusReport = () => {
   if (!currentUser) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-amiri">
+    <div className="min-h-screen bg-gray-100 flex flex-col font-amiri">
       <NavBar />
-      <div className="container mx-auto p-4 sm:p-6 max-w-7xl">
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
         <AnimatePresence>
           {loading && <LoadingSpinner />}
         </AnimatePresence>
@@ -691,10 +702,10 @@ const MonthlyBonusReport = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 mb-6"
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6"
         >
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-            <SettingsIcon className="h-7 w-7 text-blue-600" />
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+            <SettingsIcon className="h-6 w-6 text-teal-500" />
             تقرير الحافز الشهري
           </h2>
           {error && (
@@ -715,7 +726,7 @@ const MonthlyBonusReport = () => {
                 type="text"
                 value={searchCode}
                 onChange={(e) => currentUser.role === 'admin' ? setSearchCode(e.target.value) : null}
-                className={`w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 ${
+                className={`w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100 ${
                   currentUser.role !== 'admin' ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 placeholder="أدخل كود الموظف"
@@ -730,7 +741,7 @@ const MonthlyBonusReport = () => {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                 disabled={loading}
               />
             </div>
@@ -742,7 +753,7 @@ const MonthlyBonusReport = () => {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                 disabled={loading}
               />
             </div>
@@ -751,9 +762,9 @@ const MonthlyBonusReport = () => {
             <motion.button
               onClick={handleSearch}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -763,9 +774,9 @@ const MonthlyBonusReport = () => {
               <motion.button
                 onClick={handleShowAll}
                 disabled={loading}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full sm:w-auto bg-gray-500 text-white px-5 py-2.5 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                   loading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -776,9 +787,9 @@ const MonthlyBonusReport = () => {
               <motion.button
                 onClick={handleExportExcel}
                 disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`w-full sm:w-auto bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full sm:w-auto bg-green-500 text-white px-5 py-2.5 rounded-md hover:bg-green-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                   loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -789,9 +800,9 @@ const MonthlyBonusReport = () => {
               <motion.button
                 onClick={handleExportWord}
                 disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`w-full sm:w-auto bg-indigo-600 text-white px-5 py-2.5 rounded-lg hover:bg-indigo-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full sm:w-auto bg-indigo-500 text-white px-5 py-2.5 rounded-md hover:bg-indigo-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                   loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -802,9 +813,9 @@ const MonthlyBonusReport = () => {
               <motion.button
                 onClick={handleSaveReport}
                 disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`w-full sm:w-auto bg-teal-600 text-white px-5 py-2.5 rounded-lg hover:bg-teal-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                   loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -820,14 +831,14 @@ const MonthlyBonusReport = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                <h2 className="text-lg font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-6 w-6 text-teal-500" />
                   تعديل بيانات التقرير
                 </h2>
                 {error && (
@@ -839,7 +850,7 @@ const MonthlyBonusReport = () => {
                     {error}
                   </motion.div>
                 )}
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div>
                     <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       كود الموظف
@@ -848,7 +859,7 @@ const MonthlyBonusReport = () => {
                       type="text"
                       name="code"
                       value={editForm.code}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm bg-gray-100 cursor-not-allowed"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm bg-gray-50 cursor-not-allowed"
                       readOnly
                     />
                   </div>
@@ -861,7 +872,7 @@ const MonthlyBonusReport = () => {
                       name="tieUpValue"
                       value={editForm.tieUpValue}
                       onChange={handleEditChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
                       required
@@ -877,7 +888,7 @@ const MonthlyBonusReport = () => {
                       name="productionValue"
                       value={editForm.productionValue}
                       onChange={handleEditChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
                       required
@@ -893,7 +904,7 @@ const MonthlyBonusReport = () => {
                       name="advances"
                       value={editForm.advances}
                       onChange={handleEditChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
                       required
@@ -909,7 +920,7 @@ const MonthlyBonusReport = () => {
                       name="deductions"
                       value={editForm.deductions}
                       onChange={handleEditChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
                       required
@@ -923,7 +934,7 @@ const MonthlyBonusReport = () => {
                     <input
                       type="text"
                       value={Number(editForm.netBonus).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm bg-gray-100 cursor-not-allowed"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
                       readOnly
                     />
                   </div>
@@ -931,9 +942,9 @@ const MonthlyBonusReport = () => {
                     <motion.button
                       onClick={handleEditSubmit}
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -943,9 +954,9 @@ const MonthlyBonusReport = () => {
                       type="button"
                       onClick={handleEditCancel}
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-5 py-2.5 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -967,15 +978,15 @@ const MonthlyBonusReport = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100"
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
           >
-            <h2 className="text-xl font-bold text-gray-800 mb-6 text-right">
+            <h2 className="text-lg font-bold text-gray-900 mb-6 text-right">
               تقرير الحافز الشهري
             </h2>
-            <div className="overflow-x-auto max-h-[60vh] rounded-lg shadow-sm">
+            <div className="overflow-x-auto max-h-[60vh] rounded-lg">
               <table className="w-full text-right text-sm border-collapse" dir="rtl">
                 <thead>
-                  <tr className="bg-gradient-to-r from-blue-700 to-blue-500 text-white sticky top-0 z-10">
+                  <tr className="bg-teal-500 text-white sticky top-0 z-10">
                     {[
                       ...(currentUser.role === 'admin' ? ['كود الموظف', 'الاسم', 'القسم'] : []),
                       'الحافز الأساسي',
@@ -994,7 +1005,7 @@ const MonthlyBonusReport = () => {
                     ].map((header) => (
                       <th
                         key={header}
-                        className="p-4 font-semibold text-sm border-b border-gray-200 whitespace-nowrap"
+                        className="p-3 font-semibold text-sm border-b border-gray-200 whitespace-nowrap"
                       >
                         {header}
                       </th>
@@ -1007,46 +1018,46 @@ const MonthlyBonusReport = () => {
                       key={index}
                       className={`${
                         index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
-                      } hover:bg-blue-50 transition-all duration-200 border-b border-gray-100`}
+                      } hover:bg-teal-50 transition-all duration-200 border-b border-gray-100`}
                     >
                       {currentUser.role === 'admin' && (
                         <>
-                          <td className="p-4 text-gray-700 whitespace-nowrap">{user.code}</td>
-                          <td className="p-4 text-gray-700">{user.employeeName}</td>
-                          <td className="p-4 text-gray-700">{user.department}</td>
+                          <td className="p-3 text-gray-700 whitespace-nowrap">{user.code}</td>
+                          <td className="p-3 text-gray-700">{user.employeeName}</td>
+                          <td className="p-3 text-gray-700">{user.department}</td>
                         </>
                       )}
-                      <td className="p-4 text-gray-700">
+                      <td className="p-3 text-gray-700">
                         {Number(user.baseBonus || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4 text-gray-700">{Number(user.bonusPercentage || 0).toFixed(2)}%</td>
-                      <td className="p-4 text-gray-700 text-center">{user.workDaysPerWeek}</td>
-                      <td className="p-4 text-gray-700 text-center">{user.totalWorkDays}</td>
-                      <td className="p-4 text-gray-700 text-center">{user.absences}</td>
-                      <td className="p-4 text-gray-700 text-center">{user.annualLeave}</td>
-                      <td className="p-4 text-gray-700 text-center">{user.totalLeaveDays}</td>
-                      <td className="p-4 text-gray-700">
+                      <td className="p-3 text-gray-700">{Number(user.bonusPercentage || 0).toFixed(2)}%</td>
+                      <td className="p-3 text-gray-700 text-center">{user.workDaysPerWeek}</td>
+                      <td className="p-3 text-gray-700 text-center">{user.totalWorkDays}</td>
+                      <td className="p-3 text-gray-700 text-center">{user.absences}</td>
+                      <td className="p-3 text-gray-700 text-center">{user.annualLeave}</td>
+                      <td className="p-3 text-gray-700 text-center">{user.totalLeaveDays}</td>
+                      <td className="p-3 text-gray-700">
                         {Number(user.tieUpValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4 text-gray-700">
+                      <td className="p-3 text-gray-700">
                         {Number(user.productionValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4 text-gray-700">
+                      <td className="p-3 text-gray-700">
                         {Number(user.advances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4 text-gray-700">
+                      <td className="p-3 text-gray-700">
                         {Number(user.deductions || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4 text-gray-800 font-semibold">
+                      <td className="p-3 text-gray-800 font-semibold">
                         {Number(user.netBonus || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
                       {currentUser.role === 'admin' && (
-                        <td className="p-4">
+                        <td className="p-3">
                           <motion.button
                             onClick={() => handleEditClick(user)}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm"
                           >
                             تعديل
                           </motion.button>
@@ -1054,47 +1065,47 @@ const MonthlyBonusReport = () => {
                       )}
                     </tr>
                   ))}
-                  <tr className="bg-blue-100 font-semibold sticky bottom-0">
+                  <tr className="bg-teal-100 font-semibold sticky bottom-0">
                     {currentUser.role === 'admin' && (
                       <>
-                        <td className="p-4">-</td>
-                        <td className="p-4">الإجمالي</td>
-                        <td className="p-4">-</td>
+                        <td className="p-3">-</td>
+                        <td className="p-3">الإجمالي</td>
+                        <td className="p-3">-</td>
                       </>
                     )}
-                    <td className="p-4">-</td>
-                    <td className="p-4">-</td>
-                    <td className="p-4 text-center">
+                    <td className="p-3">-</td>
+                    <td className="p-3">-</td>
+                    <td className="p-3 text-center">
                       {users.reduce((sum, user) => sum + Number(user.workDaysPerWeek || 0), 0)}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 text-center">
                       {users.reduce((sum, user) => sum + Number(user.totalWorkDays || 0), 0)}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 text-center">
                       {users.reduce((sum, user) => sum + Number(user.absences || 0), 0)}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 text-center">
                       {users.reduce((sum, user) => sum + Number(user.annualLeave || 0), 0)}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 text-center">
                       {users.reduce((sum, user) => sum + Number(user.totalLeaveDays || 0), 0)}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3">
                       {users.reduce((sum, user) => sum + Number(user.tieUpValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3">
                       {users.reduce((sum, user) => sum + Number(user.productionValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3">
                       {users.reduce((sum, user) => sum + Number(user.advances || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3">
                       {users.reduce((sum, user) => sum + Number(user.deductions || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3">
                       {users.reduce((sum, user) => sum + Number(user.netBonus || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    {currentUser.role === 'admin' && <td className="p-4">-</td>}
+                    {currentUser.role === 'admin' && <td className="p-3">-</td>}
                   </tr>
                 </tbody>
               </table>
@@ -1103,9 +1114,9 @@ const MonthlyBonusReport = () => {
               <motion.button
                 onClick={handleSaveReport}
                 disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`w-full mt-6 bg-teal-600 text-white py-3 rounded-lg hover:bg-teal-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full mt-6 bg-teal-500 text-white py-3 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                   loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -1119,7 +1130,7 @@ const MonthlyBonusReport = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 text-center"
+              className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center"
             >
               <p className="text-gray-600 text-sm">
                 {currentUser.role === 'admin'

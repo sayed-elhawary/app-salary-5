@@ -193,37 +193,37 @@ router.post('/', authMiddleware, async (req, res) => {
 
 // تحديث بيانات مستخدم
 router.put('/:code', authMiddleware, async (req, res) => {
+  const cache = req.app.get('cache'); // جلب cache من app
   try {
     console.log('Received update request for user:', req.params.code, 'Data:', req.body);
-    const {
-      code,
-      fullName,
-      password,
-      department,
-      baseSalary,
-      baseBonus,
-      bonusPercentage,
-      mealAllowance,
-      medicalInsurance,
-      socialInsurance,
-      workDaysPerWeek,
-      status,
-      createdBy,
-      annualLeaveBalance,
-      eidBonus,
+    const { penaltiesValue, violationsInstallment, totalViolationsValue, advances, deductionsValue, createdBy } = req.body;
+
+    // التحقق من وجود حقل واحد على الأقل للتعديل
+    if (
+      penaltiesValue === undefined &&
+      violationsInstallment === undefined &&
+      advances === undefined &&
+      totalViolationsValue === undefined &&
+      deductionsValue === undefined
+    ) {
+      console.error('No valid fields provided for update');
+      return res.status(400).json({ message: 'يجب تقديم حقل واحد على الأقل للتعديل (قيمة الجزاءات، قسط المخالفات، السلف)' });
+    }
+
+    // التحقق من القيم الرقمية
+    const numericFields = {
       penaltiesValue,
       violationsInstallment,
       totalViolationsValue,
       advances,
-      totalOfficialLeaveDays,
-      monthlyLateAllowance,
-      customAnnualLeave,
-    } = req.body;
-
-    // تنظيف المدخلات النصية
-    const sanitizedCode = code ? sanitizeHtml(code) : undefined;
-    const sanitizedFullName = fullName ? sanitizeHtml(fullName) : undefined;
-    const sanitizedDepartment = department ? sanitizeHtml(department) : undefined;
+      deductionsValue,
+    };
+    for (const [key, value] of Object.entries(numericFields)) {
+      if (value !== undefined && (isNaN(value) || value < 0)) {
+        console.error(`Invalid ${key}: ${value}`);
+        return res.status(400).json({ message: `قيمة ${key} يجب أن تكون رقمًا موجبًا` });
+      }
+    }
 
     // البحث عن المستخدم
     const user = await User.findOne({ code: req.params.code });
@@ -232,68 +232,56 @@ router.put('/:code', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'المستخدم غير موجود' });
     }
 
-    // التحقق من القيم الرقمية
-    const numericFields = {
-      baseSalary,
-      baseBonus,
-      bonusPercentage,
-      mealAllowance,
-      medicalInsurance,
-      socialInsurance,
-      workDaysPerWeek,
-      annualLeaveBalance,
-      eidBonus,
-      penaltiesValue,
-      violationsInstallment,
-      totalViolationsValue,
-      advances,
-      totalOfficialLeaveDays,
-      monthlyLateAllowance,
-      customAnnualLeave,
-    };
-
-    for (const [key, value] of Object.entries(numericFields)) {
-      if (value !== undefined && (isNaN(value) || value < 0)) {
-        console.error(`Invalid ${key}: ${value}`);
-        return res.status(400).json({ message: `قيمة ${key} يجب أن تكون رقمًا موجبًا` });
-      }
-    }
-
-    // تحديث الحقول
-    user.code = sanitizedCode || user.code;
-    user.fullName = sanitizedFullName || user.fullName;
-    if (password) {
-      user.password = await bcrypt.hash(password, 10); // تشفير كلمة المرور يدويًا هنا
-    }
-    user.department = sanitizedDepartment || user.department;
-    user.baseSalary = baseSalary !== undefined ? parseFloat(baseSalary) : user.baseSalary;
-    user.baseBonus = baseBonus !== undefined ? parseFloat(baseBonus) : user.baseBonus;
-    user.bonusPercentage = bonusPercentage !== undefined ? parseFloat(bonusPercentage) : user.bonusPercentage;
-    user.mealAllowance = mealAllowance !== undefined ? parseFloat(mealAllowance) : user.mealAllowance;
-    user.medicalInsurance = medicalInsurance !== undefined ? parseFloat(medicalInsurance) : user.medicalInsurance;
-    user.socialInsurance = socialInsurance !== undefined ? parseFloat(socialInsurance) : user.socialInsurance;
-    user.workDaysPerWeek = workDaysPerWeek !== undefined ? parseInt(workDaysPerWeek) : user.workDaysPerWeek;
-    user.status = status || user.status;
-    user.createdBy = createdBy || user.createdBy;
-    user.annualLeaveBalance = annualLeaveBalance !== undefined ? parseInt(annualLeaveBalance) : user.annualLeaveBalance;
-    user.eidBonus = eidBonus !== undefined ? parseFloat(eidBonus) : user.eidBonus;
+    // تحديث الحقول المسموح بها فقط
     user.penaltiesValue = penaltiesValue !== undefined ? parseFloat(penaltiesValue) : user.penaltiesValue;
     user.violationsInstallment = violationsInstallment !== undefined ? parseFloat(violationsInstallment) : user.violationsInstallment;
     user.totalViolationsValue = totalViolationsValue !== undefined ? parseFloat(totalViolationsValue) : user.totalViolationsValue;
     user.advances = advances !== undefined ? parseFloat(advances) : user.advances;
-    user.totalOfficialLeaveDays = totalOfficialLeaveDays !== undefined ? parseInt(totalOfficialLeaveDays) : user.totalOfficialLeaveDays;
-    user.monthlyLateAllowance = monthlyLateAllowance !== undefined ? parseFloat(monthlyLateAllowance) : user.monthlyLateAllowance;
-    user.customAnnualLeave = customAnnualLeave !== undefined ? parseInt(customAnnualLeave) : user.customAnnualLeave;
+    user.deductionsValue = deductionsValue !== undefined ? parseFloat(deductionsValue) : user.deductionsValue;
+    user.createdBy = createdBy || user.createdBy;
 
-    await user.save();
+    // تسجيل البيانات قبل الحفظ
+    console.log('Data before save:', {
+      code: user.code,
+      penaltiesValue: user.penaltiesValue,
+      violationsInstallment: user.violationsInstallment,
+      totalViolationsValue: user.totalViolationsValue,
+      advances: user.advances,
+      deductionsValue: user.deductionsValue,
+    });
+
+    // حفظ التغييرات
+    try {
+      await user.save();
+      console.log('User saved successfully:', user.code);
+    } catch (saveError) {
+      console.error('Error saving user:', saveError.message);
+      return res.status(500).json({ message: 'خطأ أثناء حفظ التغييرات: ' + saveError.message });
+    }
+
+    // إبطال ذاكرة التخزين المؤقت المرتبطة بالمستخدم
+    try {
+      const cacheKeys = cache.keys().filter(key => key.includes(`${req.params.code}:`));
+      cacheKeys.forEach(key => {
+        console.log(`Invalidating cache key: ${key}`);
+        cache.del(key);
+      });
+    } catch (cacheError) {
+      console.error('Error invalidating cache:', cacheError.message);
+    }
+
+    // جلب البيانات المحدثة
     const netSalaryData = await user.netSalary;
     console.log('Updated user:', {
       code: user.code,
+      penaltiesValue: user.penaltiesValue,
       violationsInstallment: user.violationsInstallment,
-      baseSalary: user.baseSalary,
+      totalViolationsValue: user.totalViolationsValue,
       advances: user.advances,
+      deductionsValue: user.deductionsValue,
       netSalary: netSalaryData.netSalary,
     });
+
     res.json({
       message: 'تم تحديث المستخدم بنجاح',
       user: { ...user.toObject(), netSalary: netSalaryData.netSalary, employeeName: user.fullName },

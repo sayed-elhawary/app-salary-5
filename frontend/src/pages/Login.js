@@ -6,19 +6,19 @@ const SuccessCheckmark = ({ onComplete }) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.5 }}
-      animate={{ opacity: 1, scale: 1, transition: { duration: 0.5 } }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.5 }}
       onAnimationComplete={onComplete}
-      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+      className="fixed inset-0 flex items-center justify-center z-50"
     >
       <motion.div
         animate={{
           scale: [1, 1.1, 1],
           transition: { duration: 1.5, repeat: Infinity, repeatType: 'loop' },
         }}
-        className="bg-gradient-to-br from-green-400 to-emerald-300 p-8 rounded-full shadow-lg w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center"
+        className="relative w-20 h-20"
       >
-        <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-full h-full text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <motion.path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -64,55 +64,71 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 px-4">
-      <div className="max-w-md md:max-w-lg w-full bg-white rounded-xl shadow-xl p-8">
-        <h2 className="text-2xl md:text-3xl font-bold mb-6 text-center text-gray-800">تسجيل الدخول</h2>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-red-500 text-center mb-4 text-sm md:text-base"
-          >
-            {error}
-          </motion.div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 font-amiri">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-md w-full bg-white p-6 rounded-xl shadow-sm border border-gray-200"
+      >
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-right">
+          تسجيل الدخول
+        </h2>
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+            >
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="space-y-6">
           <div>
-            <label className="block text-gray-700 mb-2 text-sm md:text-base">كود الموظف</label>
+            <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+              كود الموظف
+            </label>
             <input
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full p-4 border rounded-lg focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
               required
+              disabled={loading}
             />
           </div>
           <div>
-            <label className="block text-gray-700 mb-2 text-sm md:text-base">كلمة المرور</label>
+            <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+              كلمة المرور
+            </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-4 border rounded-lg focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
               required
+              disabled={loading}
             />
           </div>
           <motion.button
             type="submit"
             disabled={loading}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 text-sm md:text-base ${
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleSubmit}
+            className={`w-full bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
               loading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
             {loading ? 'جاري الدخول...' : 'دخول'}
           </motion.button>
-        </form>
+        </div>
         <AnimatePresence>
           {showSuccess && <SuccessCheckmark onComplete={() => setShowSuccess(false)} />}
         </AnimatePresence>
-      </div>
+      </motion.div>
     </div>
   );
 };

@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../components/AuthProvider';
 import { HomeIcon, UserPlusIcon, UploadIcon, DollarSignIcon, SettingsIcon, GiftIcon } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -17,63 +17,75 @@ const containerVariants = {
 const cardVariants = {
   hidden: { opacity: 0, scale: 0.9, y: 20 },
   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
-  hover: { scale: 1.05, transition: { duration: 0.3 } },
+  hover: { scale: 1.02, transition: { duration: 0.3 } },
 };
+
+// مكون مؤشر التحميل
+const LoadingSpinner = () => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 flex items-center justify-center z-50"
+  >
+    <motion.div
+      className="relative flex items-center justify-center"
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+    >
+      <svg className="w-16 h-16" viewBox="0 0 50 50">
+        <motion.circle
+          cx="25"
+          cy="25"
+          r="20"
+          fill="none"
+          stroke="#06b6d4"
+          strokeWidth="4"
+          strokeDasharray="80 200"
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="absolute text-sm font-medium text-teal-600 font-amiri">
+        جارٍ التحميل
+      </span>
+    </motion.div>
+  </motion.div>
+);
 
 const Dashboard = () => {
   const { user, loading } = useContext(AuthContext);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="flex items-center space-x-2">
-          <svg
-            className="animate-spin h-8 w-8 text-blue-500"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8 8 8 0 01-8-8z"
-            ></path>
-          </svg>
-          <span className="text-gray-600">جاري التحميل...</span>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <AnimatePresence>
+          <LoadingSpinner />
+        </AnimatePresence>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <p className="text-red-500">يرجى تسجيل الدخول للوصول إلى لوحة التحكم</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <p className="text-red-500 text-sm font-amiri">يرجى تسجيل الدخول للوصول إلى لوحة التحكم</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-100 py-8 font-amiri">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.h1
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="text-4xl md:text-5xl font-bold text-gray-800 text-center mb-12"
+          className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-8"
         >
           لوحة التحكم
         </motion.h1>
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
@@ -83,36 +95,36 @@ const Dashboard = () => {
               <motion.div variants={cardVariants} whileHover="hover">
                 <Link
                   to="/create-account"
-                  className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center space-x-4 group hover:bg-gray-50 transition-all duration-200"
                 >
-                  <UserPlusIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+                  <UserPlusIcon className="h-8 w-8 text-teal-500 group-hover:text-teal-600 transition-colors duration-200" />
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800">إنشاء حساب</h2>
-                    <p className="text-gray-500 mt-1 text-sm">إضافة موظف جديد إلى النظام</p>
+                    <h2 className="text-lg font-semibold text-gray-900">إنشاء حساب</h2>
+                    <p className="text-gray-500 text-sm mt-1">إضافة موظف جديد إلى النظام</p>
                   </div>
                 </Link>
               </motion.div>
               <motion.div variants={cardVariants} whileHover="hover">
                 <Link
                   to="/upload-fingerprint"
-                  className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center space-x-4 group hover:bg-gray-50 transition-all duration-200"
                 >
-                  <UploadIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+                  <UploadIcon className="h-8 w-8 text-teal-500 group-hover:text-teal-600 transition-colors duration-200" />
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800">رفع بصمة</h2>
-                    <p className="text-gray-500 mt-1 text-sm">رفع ملف بصمة الموظفين</p>
+                    <h2 className="text-lg font-semibold text-gray-900">رفع بصمة</h2>
+                    <p className="text-gray-500 text-sm mt-1">رفع ملف بصمة الموظفين</p>
                   </div>
                 </Link>
               </motion.div>
               <motion.div variants={cardVariants} whileHover="hover">
                 <Link
                   to="/users/settings"
-                  className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center space-x-4 group hover:bg-gray-50 transition-all duration-200"
                 >
-                  <SettingsIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+                  <SettingsIcon className="h-8 w-8 text-teal-500 group-hover:text-teal-600 transition-colors duration-200" />
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800">إعدادات المستخدم</h2>
-                    <p className="text-gray-500 mt-1 text-sm">تعديل إعدادات حسابات الموظفين</p>
+                    <h2 className="text-lg font-semibold text-gray-900">إعدادات المستخدم</h2>
+                    <p className="text-gray-500 text-sm mt-1">تعديل إعدادات حسابات الموظفين</p>
                   </div>
                 </Link>
               </motion.div>
@@ -121,24 +133,24 @@ const Dashboard = () => {
           <motion.div variants={cardVariants} whileHover="hover">
             <Link
               to="/monthly-salary-report"
-              className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+              className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center space-x-4 group hover:bg-gray-50 transition-all duration-200"
             >
-              <DollarSignIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+              <DollarSignIcon className="h-8 w-8 text-teal-500 group-hover:text-teal-600 transition-colors duration-200" />
               <div>
-                <h2 className="text-xl font-semibold text-gray-800">تقرير المرتب الشهري</h2>
-                <p className="text-gray-500 mt-1 text-sm">عرض تقرير المرتبات الشهرية للموظفين</p>
+                <h2 className="text-lg font-semibold text-gray-900">تقرير المرتب الشهري</h2>
+                <p className="text-gray-500 text-sm mt-1">عرض تقرير المرتبات الشهرية للموظفين</p>
               </div>
             </Link>
           </motion.div>
           <motion.div variants={cardVariants} whileHover="hover">
             <Link
               to="/monthly-bonus-report"
-              className="bg-white p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-4 border border-gray-100 group"
+              className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center space-x-4 group hover:bg-gray-50 transition-all duration-200"
             >
-              <GiftIcon className="h-10 w-10 text-blue-500 group-hover:text-blue-700 transition-colors duration-300" />
+              <GiftIcon className="h-8 w-8 text-teal-500 group-hover:text-teal-600 transition-colors duration-200" />
               <div>
-                <h2 className="text-xl font-semibold text-gray-800">تقرير الحافز الشهري</h2>
-                <p className="text-gray-500 mt-1 text-sm">عرض تقرير الحوافز الشهرية للموظفين</p>
+                <h2 className="text-lg font-semibold text-gray-900">تقرير الحافز الشهري</h2>
+                <p className="text-gray-500 text-sm mt-1">عرض تقرير الحوافز الشهرية للموظفين</p>
               </div>
             </Link>
           </motion.div>

@@ -14,18 +14,29 @@ const LoadingSpinner = () => (
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 backdrop-blur-sm"
+    className="fixed inset-0 flex items-center justify-center z-50"
   >
-    <div className="relative">
-      <motion.div
-        className="w-16 h-16 border-4 border-t-transparent border-teal-500 rounded-full"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-      />
-      <span className="absolute inset-0 flex items-center justify-center text-teal-100 text-sm font-medium font-amiri">
-        جارٍ التحميل...
+    <motion.div
+      className="relative flex items-center justify-center"
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+    >
+      <svg className="w-16 h-16" viewBox="0 0 50 50">
+        <motion.circle
+          cx="25"
+          cy="25"
+          r="20"
+          fill="none"
+          stroke="#06b6d4"
+          strokeWidth="4"
+          strokeDasharray="80 200"
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="absolute text-sm font-medium text-teal-600 font-amiri">
+        جارٍ التحميل
       </span>
-    </div>
+    </motion.div>
   </motion.div>
 );
 
@@ -34,19 +45,19 @@ const SuccessCheckmark = ({ onComplete }) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.5 }}
-      animate={{ opacity: 1, scale: 1, transition: { duration: 0.5 } }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.5 }}
       onAnimationComplete={onComplete}
-      className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center z-50"
     >
       <motion.div
         animate={{
           scale: [1, 1.1, 1],
           transition: { duration: 1.5, repeat: Infinity, repeatType: 'loop' },
         }}
-        className="bg-gradient-to-br from-teal-500 to-emerald-400 p-8 rounded-2xl shadow-2xl w-32 h-32 flex items-center justify-center"
+        className="relative w-20 h-20"
       >
-        <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-full h-full text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <motion.path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -587,9 +598,9 @@ const UploadFingerprint = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-amiri">
+    <div className="min-h-screen bg-gray-100 flex flex-col font-amiri">
       <NavBar />
-      <div className="container mx-auto p-4 sm:p-6 max-w-7xl">
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
         <AnimatePresence>
           {loading && <LoadingSpinner />}
         </AnimatePresence>
@@ -602,22 +613,22 @@ const UploadFingerprint = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 mb-6"
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6"
         >
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-            <SettingsIcon className="h-7 w-7 text-blue-600" />
+          <h2 className="text-xl font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+            <SettingsIcon className="h-6 w-6 text-teal-500" />
             رفع ملف البصمات
           </h2>
           {errorMessage && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+              className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-right text-sm font-medium"
             >
               {errorMessage}
             </motion.div>
           )}
-          <form onSubmit={handleUpload} className="space-y-5">
+          <form onSubmit={handleUpload} className="space-y-4">
             <div>
               <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                 اختر ملف Excel
@@ -626,16 +637,16 @@ const UploadFingerprint = () => {
                 type="file"
                 accept=".xlsx, .xls"
                 onChange={handleFileChange}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                 disabled={loading}
               />
             </div>
             <motion.button
               type="submit"
               disabled={loading || !file}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading || !file ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -649,17 +660,17 @@ const UploadFingerprint = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 mb-6"
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6"
         >
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-            <SettingsIcon className="h-7 w-7 text-blue-600" />
+          <h2 className="text-xl font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+            <SettingsIcon className="h-6 w-6 text-teal-500" />
             البحث في التقارير
           </h2>
           {errorMessage && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+              className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-right text-sm font-medium"
             >
               {errorMessage}
             </motion.div>
@@ -673,7 +684,7 @@ const UploadFingerprint = () => {
                 type="text"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                 placeholder="أدخل كود الموظف"
                 disabled={loading}
               />
@@ -686,7 +697,7 @@ const UploadFingerprint = () => {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                 disabled={loading}
               />
             </div>
@@ -698,18 +709,18 @@ const UploadFingerprint = () => {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                 disabled={loading}
               />
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-3 mt-6">
+          <div className="flex flex-wrap justify-end gap-3 mt-4">
             <motion.button
               onClick={handleSearch}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -718,9 +729,9 @@ const UploadFingerprint = () => {
             <motion.button
               onClick={handleShowAll}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -729,9 +740,9 @@ const UploadFingerprint = () => {
             <motion.button
               onClick={() => setIsCreatingOfficialLeave(true)}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-teal-600 text-white px-5 py-2.5 rounded-lg hover:bg-teal-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -740,9 +751,9 @@ const UploadFingerprint = () => {
             <motion.button
               onClick={() => setIsCreatingLeaveCompensation(true)}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-emerald-500 text-white px-4 py-2 rounded-md hover:bg-emerald-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -751,9 +762,9 @@ const UploadFingerprint = () => {
             <motion.button
               onClick={() => setIsCreatingMedicalLeave(true)}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-cyan-600 text-white px-5 py-2.5 rounded-lg hover:bg-cyan-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-cyan-500 text-white px-4 py-2 rounded-md hover:bg-cyan-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -762,9 +773,9 @@ const UploadFingerprint = () => {
             <motion.button
               onClick={() => setIsCreatingAnnualLeave(true)}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-lime-600 text-white px-5 py-2.5 rounded-lg hover:bg-lime-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-lime-500 text-white px-4 py-2 rounded-md hover:bg-lime-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -773,9 +784,9 @@ const UploadFingerprint = () => {
             <motion.button
               onClick={handleDeleteAllFingerprints}
               disabled={loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700 transition-all duration-200 text-sm font-medium shadow-md ${
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full sm:w-auto bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -788,7 +799,7 @@ const UploadFingerprint = () => {
                 type="checkbox"
                 checked={showSingleFingerprint}
                 onChange={() => setShowSingleFingerprint(!showSingleFingerprint)}
-                className="mr-2 accent-blue-600"
+                className="mr-2 accent-teal-500"
                 disabled={loading}
               />
               عرض البصمات الفردية فقط
@@ -798,7 +809,7 @@ const UploadFingerprint = () => {
                 type="checkbox"
                 checked={showAbsenceDays}
                 onChange={() => setShowAbsenceDays(!showAbsenceDays)}
-                className="mr-2 accent-blue-600"
+                className="mr-2 accent-teal-500"
                 disabled={loading}
               />
               عرض أيام الغياب فقط
@@ -810,29 +821,29 @@ const UploadFingerprint = () => {
         <AnimatePresence>
           {isCreatingOfficialLeave && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                <h2 className="text-lg font-bold text-gray-900 mb-4 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-5 w-5 text-teal-500" />
                   إضافة إجازة رسمية
                 </h2>
                 {errorMessage && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                    className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-right text-sm font-medium"
                   >
                     {errorMessage}
                   </motion.div>
                 )}
-                <form onSubmit={handleCreateOfficialLeave} className="space-y-5">
+                <form onSubmit={handleCreateOfficialLeave} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
@@ -840,7 +851,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={officialLeaveDetails.applyToAll}
                         onChange={handleOfficialLeaveChange}
-                        className="mr-2 accent-blue-600"
+                        className="mr-2 accent-teal-500"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -856,7 +867,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={officialLeaveDetails.code}
                         onChange={handleOfficialLeaveChange}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -872,7 +883,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={officialLeaveDetails.dateFrom}
                       onChange={handleOfficialLeaveChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -886,7 +897,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={officialLeaveDetails.dateTo}
                       onChange={handleOfficialLeaveChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -895,9 +906,9 @@ const UploadFingerprint = () => {
                     <motion.button
                       type="submit"
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -907,9 +918,9 @@ const UploadFingerprint = () => {
                       type="button"
                       onClick={() => setIsCreatingOfficialLeave(false)}
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -926,29 +937,29 @@ const UploadFingerprint = () => {
         <AnimatePresence>
           {isCreatingLeaveCompensation && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                <h2 className="text-lg font-bold text-gray-900 mb-4 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-5 w-5 text-teal-500" />
                   إضافة بدل إجازة
                 </h2>
                 {errorMessage && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                    className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-right text-sm font-medium"
                   >
                     {errorMessage}
                   </motion.div>
                 )}
-                <form onSubmit={handleCreateLeaveCompensation} className="space-y-5">
+                <form onSubmit={handleCreateLeaveCompensation} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
@@ -956,7 +967,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={leaveCompensationDetails.applyToAll}
                         onChange={handleLeaveCompensationChange}
-                        className="mr-2 accent-blue-600"
+                        className="mr-2 accent-teal-500"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -972,7 +983,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={leaveCompensationDetails.code}
                         onChange={handleLeaveCompensationChange}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -988,7 +999,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={leaveCompensationDetails.dateFrom}
                       onChange={handleLeaveCompensationChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -1002,7 +1013,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={leaveCompensationDetails.dateTo}
                       onChange={handleLeaveCompensationChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -1011,9 +1022,9 @@ const UploadFingerprint = () => {
                     <motion.button
                       type="submit"
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1023,9 +1034,9 @@ const UploadFingerprint = () => {
                       type="button"
                       onClick={() => setIsCreatingLeaveCompensation(false)}
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1042,29 +1053,29 @@ const UploadFingerprint = () => {
         <AnimatePresence>
           {isCreatingMedicalLeave && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                <h2 className="text-lg font-bold text-gray-900 mb-4 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-5 w-5 text-teal-500" />
                   إضافة إجازة طبية
                 </h2>
                 {errorMessage && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                    className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-right text-sm font-medium"
                   >
                     {errorMessage}
                   </motion.div>
                 )}
-                <form onSubmit={handleCreateMedicalLeave} className="space-y-5">
+                <form onSubmit={handleCreateMedicalLeave} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
@@ -1072,7 +1083,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={medicalLeaveDetails.applyToAll}
                         onChange={handleMedicalLeaveChange}
-                        className="mr-2 accent-blue-600"
+                        className="mr-2 accent-teal-500"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -1088,7 +1099,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={medicalLeaveDetails.code}
                         onChange={handleMedicalLeaveChange}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -1104,7 +1115,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={medicalLeaveDetails.dateFrom}
                       onChange={handleMedicalLeaveChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -1118,7 +1129,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={medicalLeaveDetails.dateTo}
                       onChange={handleMedicalLeaveChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -1127,9 +1138,9 @@ const UploadFingerprint = () => {
                     <motion.button
                       type="submit"
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1139,9 +1150,9 @@ const UploadFingerprint = () => {
                       type="button"
                       onClick={() => setIsCreatingMedicalLeave(false)}
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1158,29 +1169,29 @@ const UploadFingerprint = () => {
         <AnimatePresence>
           {isCreatingAnnualLeave && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-md"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-xl font-bold text-gray-800 mb-6 text-right flex items-center gap-3">
-                  <SettingsIcon className="h-6 w-6 text-blue-600" />
+                <h2 className="text-lg font-bold text-gray-900 mb-4 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-5 w-5 text-teal-500" />
                   إضافة إجازة سنوية
                 </h2>
                 {errorMessage && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+                    className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-right text-sm font-medium"
                   >
                     {errorMessage}
                   </motion.div>
                 )}
-                <form onSubmit={handleCreateAnnualLeave} className="space-y-5">
+                <form onSubmit={handleCreateAnnualLeave} className="space-y-4">
                   <div>
                     <label className="flex items-center text-gray-600 text-sm font-medium mb-2 text-right">
                       <input
@@ -1188,7 +1199,7 @@ const UploadFingerprint = () => {
                         name="applyToAll"
                         checked={annualLeaveDetails.applyToAll}
                         onChange={handleAnnualLeaveChange}
-                        className="mr-2 accent-blue-600"
+                        className="mr-2 accent-teal-500"
                         disabled={loading}
                       />
                       تطبيق على الجميع
@@ -1204,7 +1215,7 @@ const UploadFingerprint = () => {
                         name="code"
                         value={annualLeaveDetails.code}
                         onChange={handleAnnualLeaveChange}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                         placeholder="أدخل كود الموظف"
                         required
                         disabled={loading}
@@ -1220,7 +1231,7 @@ const UploadFingerprint = () => {
                       name="dateFrom"
                       value={annualLeaveDetails.dateFrom}
                       onChange={handleAnnualLeaveChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -1234,7 +1245,7 @@ const UploadFingerprint = () => {
                       name="dateTo"
                       value={annualLeaveDetails.dateTo}
                       onChange={handleAnnualLeaveChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       disabled={loading}
                     />
@@ -1243,9 +1254,9 @@ const UploadFingerprint = () => {
                     <motion.button
                       type="submit"
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1255,9 +1266,9 @@ const UploadFingerprint = () => {
                       type="button"
                       onClick={() => setIsCreatingAnnualLeave(false)}
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`w-full sm:w-auto bg-gray-600 text-white px-5 py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -1276,12 +1287,12 @@ const UploadFingerprint = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100"
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
           >
-            <h2 className="text-xl font-bold text-gray-800 mb-6 text-right">
+            <h2 className="text-xl font-bold text-gray-900 mb-6 text-right">
               التقارير
             </h2>
-            <div className="overflow-x-auto max-h-[60vh] rounded-lg shadow-sm">
+            <div className="overflow-x-auto max-h-[60vh] rounded-md shadow-sm">
               <ReportTable reports={filteredReports} onEdit={handleEditReport} />
             </div>
           </motion.div>
