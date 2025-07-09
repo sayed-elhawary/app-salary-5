@@ -975,9 +975,11 @@ import NodeCache from 'node-cache';
 const cache = new NodeCache({ stdTTL: 60 }); // ذاكرة مؤقتة لمدة 60 ثانية
 
 // تقرير المرتب الشهري
+
+
 router.get('/salary-report', authMiddleware, async (req, res) => {
   const { code, dateFrom, dateTo } = req.query;
-  const cache = req.app.get('cache');
+  const cache = req.app.get('cache'); // الكاش معرف مسبقًا في التطبيق
 
   try {
     if (!req.user || !req.user.code || !req.user.role) {
@@ -988,7 +990,9 @@ router.get('/salary-report', authMiddleware, async (req, res) => {
     const cacheKey = `${req.user.code}:${code || 'all'}:${dateFrom}:${dateTo}`;
     let cachedReport;
     try {
-      cachedReport = cache.get(cacheKey);
+      if (cache) {
+        cachedReport = await cache.get(cacheKey); // التأكد من وجود الكاش
+      }
     } catch (cacheError) {
       console.error('Error accessing cache:', cacheError.message);
     }
@@ -1101,7 +1105,7 @@ router.get('/salary-report', authMiddleware, async (req, res) => {
               },
             }).lean();
             if (!existingWeeklyReport) {
-              console.log(`Creating weekly leave report for ${user.code} on ${dateStr}`);
+              console.log(`Creating weekly leave report for ${user.code} on ${dateStr}`);
               const fingerprint = new Fingerprint(weeklyLeaveReport);
               await fingerprint.calculateAttendance();
               await fingerprint.save();
@@ -1150,15 +1154,19 @@ router.get('/salary-report', authMiddleware, async (req, res) => {
             }
           }
         } else {
-          existingReport.employeeName = user.fullName || 'غير معروف';
-          existingReport.monthlyLateAllowance = user.monthlyLateAllowance || 120;
-          existingReport.customAnnualLeave = user.customAnnualLeave || 0;
-          existingReport.annualLeaveBalance = user.annualLeaveBalance || 21;
-          existingReport.advances = user.advances || 0;
-          existingReport.appropriateValue = existingReport.appropriateValue || 0;
-          existingReport.appropriateValueDays = existingReport.appropriateValue ? 1 : 0;
-          existingReport.isSingleFingerprint = (existingReport.checkIn && !existingReport.checkOut) || (!existingReport.checkIn && existingReport.checkOut);
-          await Fingerprint.findByIdAndUpdate(existingReport._id, existingReport, { new: true });
+          // إنشاء كائن تحديث يحتوي فقط على الحقول المطلوبة
+          const updateData = {
+            employeeName: user.fullName || 'غير معروف',
+            monthlyLateAllowance: user.monthlyLateAllowance || 120,
+            customAnnualLeave: user.customAnnualLeave || 0,
+            annualLeaveBalance: user.annualLeaveBalance || 21,
+            advances: user.advances || 0,
+            appropriateValue: existingReport.appropriateValue || 0,
+            appropriateValueDays: existingReport.appropriateValue ? 1 : 0,
+            isSingleFingerprint: Boolean((existingReport.checkIn && !existingReport.checkOut) || (!existingReport.checkIn && existingReport.checkOut)),
+          };
+          console.log(`Updating fingerprint for ${user.code} on ${dateStr}:`, updateData);
+          await Fingerprint.findByIdAndUpdate(existingReport._id, updateData, { new: true });
         }
         currentDate = currentDate.plus({ days: 1 });
       }
@@ -1283,8 +1291,10 @@ router.get('/salary-report', authMiddleware, async (req, res) => {
     }
 
     try {
-      cache.set(cacheKey, { salaryReports }, 60);
-      console.log(`Cached salary report for key: ${cacheKey}`);
+      if (cache) {
+        await cache.set(cacheKey, { salaryReports }, 60);
+        console.log(`Cached salary report for key: ${cacheKey}`);
+      }
     } catch (cacheError) {
       console.error('Error setting cache:', cacheError.message);
     }
@@ -1295,6 +1305,8 @@ router.get('/salary-report', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'خطأ في جلب تقرير المرتب الشهري', error: error.message });
   }
 });
+
+
 // ... باقي الكود كما هو ...
 
 // تحديث بيانات مستخدم

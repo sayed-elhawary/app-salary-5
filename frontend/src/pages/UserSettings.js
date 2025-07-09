@@ -10,19 +10,19 @@ const SuccessCheckmark = ({ onComplete }) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.5 }}
-      animate={{ opacity: 1, scale: 1, transition: { duration: 0.5 } }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.5 }}
       onAnimationComplete={onComplete}
-      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+      className="fixed inset-0 flex items-center justify-center z-50"
     >
       <motion.div
         animate={{
           scale: [1, 1.1, 1],
           transition: { duration: 1.5, repeat: Infinity, repeatType: 'loop' },
         }}
-        className="bg-gradient-to-br from-green-400 to-emerald-300 p-8 rounded-full shadow-lg w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center"
+        className="relative w-20 h-20"
       >
-        <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-full h-full text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <motion.path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -36,6 +36,37 @@ const SuccessCheckmark = ({ onComplete }) => {
     </motion.div>
   );
 };
+
+const LoadingSpinner = () => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 flex items-center justify-center z-50"
+  >
+    <motion.div
+      className="relative flex items-center justify-center"
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+    >
+      <svg className="w-16 h-16" viewBox="0 0 50 50">
+        <motion.circle
+          cx="25"
+          cy="25"
+          r="20"
+          fill="none"
+          stroke="#06b6d4"
+          strokeWidth="4"
+          strokeDasharray="80 200"
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="absolute text-sm font-medium text-teal-600 font-amiri">
+        جارٍ التحميل
+      </span>
+    </motion.div>
+  </motion.div>
+);
 
 const UserSettings = () => {
   const { user } = useContext(AuthContext);
@@ -208,48 +239,52 @@ const UserSettings = () => {
   if (!user || user.role !== 'admin') return null;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-100 flex flex-col font-amiri">
       <NavBar />
-      <div className="container mx-auto p-4 sm:p-6 max-w-md md:max-w-4xl">
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
+        <AnimatePresence>
+          {loading && <LoadingSpinner />}
+        </AnimatePresence>
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-100 mb-6"
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6"
         >
-          <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
-            <SettingsIcon className="h-6 w-6 text-blue-500" />
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+            <SettingsIcon className="h-6 w-6 text-teal-500" />
             إعدادات المستخدم
           </h2>
           {error && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-right text-sm md:text-base"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
             >
               {error}
             </motion.div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                 كود الموظف
               </label>
               <input
                 type="text"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
-                className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                 placeholder="أدخل كود الموظف"
+                disabled={loading}
               />
             </div>
-            <div className="flex flex-wrap justify-end gap-2 sm:gap-4 mt-4 sm:mt-8">
+            <div className="flex flex-wrap justify-end gap-3 mt-4 sm:mt-8">
               <motion.button
                 onClick={handleSearch}
                 disabled={loading}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition-colors duration-300 text-sm md:text-base ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                   loading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -258,9 +293,9 @@ const UserSettings = () => {
               <motion.button
                 onClick={handleShowAll}
                 disabled={loading}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`bg-purple-500 text-white px-4 py-3 rounded-lg hover:bg-purple-600 transition-colors duration-300 text-sm md:text-base ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                   loading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -276,28 +311,28 @@ const UserSettings = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
             >
               <motion.div
-                className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md md:max-w-4xl max-h-[90vh] overflow-y-auto"
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
-                  <SettingsIcon className="h-6 w-6 text-blue-500" />
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+                  <SettingsIcon className="h-6 w-6 text-teal-500" />
                   تعديل بيانات المستخدم
                 </h2>
                 {error && (
                   <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-right text-sm md:text-base"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
                   >
                     {error}
                   </motion.div>
                 )}
-                <form onSubmit={handleEditSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       كود الموظف
                     </label>
                     <input
@@ -305,13 +340,13 @@ const UserSettings = () => {
                       name="code"
                       value={editForm.code}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm bg-gray-50 cursor-not-allowed"
                       required
                       readOnly
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       الاسم الكامل
                     </label>
                     <input
@@ -319,12 +354,13 @@ const UserSettings = () => {
                       name="employeeName"
                       value={editForm.employeeName}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       القسم
                     </label>
                     <input
@@ -332,12 +368,13 @@ const UserSettings = () => {
                       name="department"
                       value={editForm.department}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       الراتب الأساسي
                     </label>
                     <input
@@ -345,14 +382,15 @@ const UserSettings = () => {
                       name="baseSalary"
                       value={editForm.baseSalary}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       required
                       min="0"
                       step="0.01"
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       التأمين الطبي
                     </label>
                     <input
@@ -360,13 +398,14 @@ const UserSettings = () => {
                       name="medicalInsurance"
                       value={editForm.medicalInsurance}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       التأمين الاجتماعي
                     </label>
                     <input
@@ -374,13 +413,14 @@ const UserSettings = () => {
                       name="socialInsurance"
                       value={editForm.socialInsurance}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       رصيد الإجازة السنوية
                     </label>
                     <input
@@ -388,12 +428,13 @@ const UserSettings = () => {
                       name="annualLeaveBalance"
                       value={editForm.annualLeaveBalance}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       العيدية
                     </label>
                     <input
@@ -401,13 +442,14 @@ const UserSettings = () => {
                       name="eidBonus"
                       value={editForm.eidBonus}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 text-sm md:text-base font-medium mb-2 text-right">
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
                       السلف
                     </label>
                     <input
@@ -415,18 +457,19 @@ const UserSettings = () => {
                       name="advances"
                       value={editForm.advances}
                       onChange={handleEditChange}
-                      className="w-full p-4 border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg min-w-[200px]"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
                       min="0"
                       step="0.01"
+                      disabled={loading}
                     />
                   </div>
-                  <div className="md:col-span-2 flex justify-end gap-4">
+                  <div className="md:col-span-2 flex justify-end gap-3">
                     <motion.button
-                      type="submit"
+                      onClick={handleEditSubmit}
                       disabled={loading}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition-colors duration-300 text-sm md:text-base ${
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
                         loading ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -435,14 +478,17 @@ const UserSettings = () => {
                     <motion.button
                       type="button"
                       onClick={handleEditCancel}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="bg-gray-500 text-white px-4 py-3 rounded-lg hover:bg-gray-600 transition-colors duration-300 text-sm md:text-base"
+                      disabled={loading}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto bg-gray-500 text-white px-5 py-2.5 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
+                        loading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     >
                       إلغاء
                     </motion.button>
                   </div>
-                </form>
+                </div>
               </motion.div>
             </motion.div>
           )}
@@ -456,67 +502,61 @@ const UserSettings = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-100"
+            transition={{ duration: 0.5 }}
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
           >
-            <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 text-right flex items-center gap-2">
-              <SettingsIcon className="h-6 w-6 text-blue-500" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+              <SettingsIcon className="h-6 w-6 text-teal-500" />
               قائمة المستخدمين
             </h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      كود الموظف
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      الاسم
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      القسم
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      الراتب الأساسي
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      التأمين الطبي
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      التأمين الاجتماعي
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      رصيد الإجازة السنوية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      العيدية
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      السلف
-                    </th>
-                    <th className="px-3 sm:px-6 py-3 text-right text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      إجراءات
-                    </th>
+            <div className="overflow-x-auto max-h-[60vh] rounded-lg">
+              <table className="w-full text-right text-sm border-collapse" dir="rtl">
+                <thead>
+                  <tr className="bg-teal-500 text-white sticky top-0 z-10">
+                    {[
+                      'كود الموظف',
+                      'الاسم',
+                      'القسم',
+                      'الراتب الأساسي',
+                      'التأمين الطبي',
+                      'التأمين الاجتماعي',
+                      'رصيد الإجازة السنوية',
+                      'العيدية',
+                      'السلف',
+                      'إجراءات',
+                    ].map((header) => (
+                      <th
+                        key={header}
+                        className="p-3 font-semibold text-sm border-b border-gray-200 whitespace-nowrap"
+                      >
+                        {header}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {users.map((userData, index) => (
-                    <tr key={index}>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{userData.code}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{userData.employeeName}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{userData.department}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.baseSalary || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.medicalInsurance || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.socialInsurance || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseInt(userData.annualLeaveBalance || 21, 10)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.eidBonus || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">{parseFloat(userData.advances || 0).toFixed(2)}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm md:text-base">
+                    <tr
+                      key={index}
+                      className={`${
+                        index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                      } hover:bg-teal-50 transition-all duration-200 border-b border-gray-100`}
+                    >
+                      <td className="p-3 text-gray-700 whitespace-nowrap">{userData.code}</td>
+                      <td className="p-3 text-gray-700">{userData.employeeName}</td>
+                      <td className="p-3 text-gray-700">{userData.department}</td>
+                      <td className="p-3 text-gray-700">{parseFloat(userData.baseSalary || 0).toFixed(2)}</td>
+                      <td className="p-3 text-gray-700">{parseFloat(userData.medicalInsurance || 0).toFixed(2)}</td>
+                      <td className="p-3 text-gray-700">{parseFloat(userData.socialInsurance || 0).toFixed(2)}</td>
+                      <td className="p-3 text-gray-700 text-center">{parseInt(userData.annualLeaveBalance || 21, 10)}</td>
+                      <td className="p-3 text-gray-700">{parseFloat(userData.eidBonus || 0).toFixed(2)}</td>
+                      <td className="p-3 text-gray-700">{parseFloat(userData.advances || 0).toFixed(2)}</td>
+                      <td className="p-3">
                         <motion.button
                           onClick={() => handleEditClick(userData)}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors duration-300 text-xs md:text-sm"
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm"
                         >
                           تعديل
                         </motion.button>
@@ -531,21 +571,14 @@ const UserSettings = () => {
 
         {users.length === 0 && !loading && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border border-gray-100 text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center"
           >
-            <p className="text-gray-700 text-sm md:text-base">لا توجد بيانات مستخدمين متاحة. يرجى البحث أو عرض جميع المستخدمين.</p>
-          </motion.div>
-        )}
-
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex justify-center items-center mt-6"
-          >
-            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-500"></div>
+            <p className="text-gray-600 text-sm font-medium">
+              لا توجد بيانات مستخدمين متاحة. يرجى البحث أو عرض جميع المستخدمين.
+            </p>
           </motion.div>
         )}
       </div>
