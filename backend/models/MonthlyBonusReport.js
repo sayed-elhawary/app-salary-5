@@ -1,3 +1,4 @@
+// backend/models/MonthlyBonusReport.js
 import mongoose from 'mongoose';
 import { DateTime } from 'luxon';
 import User from './User.js';
@@ -46,7 +47,12 @@ const monthlyBonusReportSchema = new mongoose.Schema({
   annualLeave: {
     type: Number,
     default: 0,
-    min: [0, 'عدد أيام الإجازة السنوية يجب ألا تكون سالبًا'],
+    min: [0, 'عدد أيام الإجازة السنوية يجب ألا يكون سالبًا'],
+  },
+  medicalLeave: {
+    type: Number,
+    default: 0,
+    min: [0, 'عدد أيام الإجازة الطبية يجب ألا يكون سالبًا'],
   },
   totalLeaveDays: {
     type: Number,
@@ -104,14 +110,61 @@ const monthlyBonusReportSchema = new mongoose.Schema({
 // فهرسة لضمان التفرد
 monthlyBonusReportSchema.index({ code: 1, dateFrom: 1, dateTo: 1 }, { unique: true });
 
-// دالة لحساب صافي المكافأة
-const calculateNetBonus = (baseBonus, bonusPercentage, absences, tieUpValue, productionValue, advances, deductions) => {
-  const bonus = Number(baseBonus || 0) * (Number(bonusPercentage || 0) / 100);
-  const dailyBonus = bonus / 30;
-  const absenceDeduction = Number(absences || 0) * dailyBonus;
-  const adjustedBonus = bonus - absenceDeduction;
-  const netBonus = adjustedBonus + Number(tieUpValue || 0) + Number(productionValue || 0) - Number(advances || 0) - Number(deductions || 0);
-  return Math.max(0, netBonus).toFixed(2);
+// دالة لحساب بيانات الحضور من Fingerprint
+const calculateAttendanceStats = async (code, startDate, endDate) => {
+  try {
+    const fingerprints = await Fingerprint.find({
+      code,
+      date: { $gte: startDate.toJSDate(), $lte: endDate.toJSDate() },
+    });
+
+    console.log(`Retrieved ${fingerprints.length} fingerprints for code ${code} from ${startDate.toISODate()} to ${endDate.toISODate()}`);
+
+    const user = await User.findOne({ code });
+    if (!user) {
+      throw new Error(`لا يوجد مستخدم بكود ${code}`);
+    }
+
+    const workDaysPerWeek = user.workDaysPerWeek || 6;
+    const isWeeklyLeaveDay = (date) => {
+      const dayOfWeek = DateTime.fromJSDate(date, { zone: 'Africa/Cairo' }).weekday;
+      return (
+        (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
+        (workDaysPerWeek === 6 && dayOfWeek === 5)
+      );
+    };
+
+    let totalWorkDays = 0;
+    let absences = 0;
+    let annualLeave = 0;
+    let medicalLeave = 0;
+
+    fingerprints.forEach((fp) => {
+      const isWorkDay =
+        !fp.absence &&
+        !fp.annualLeave &&
+        !fp.medicalLeave &&
+        !fp.officialLeave &&
+        fp.leaveCompensation === 0 &&
+        fp.appropriateValue === 0 &&
+        !isWeeklyLeaveDay(fp.date);
+      if (isWorkDay) totalWorkDays += 1;
+      if (fp.absence) absences += 1;
+      if (fp.annualLeave) annualLeave += 1;
+      if (fp.medicalLeave) medicalLeave += 1;
+    });
+
+    const totalLeaveDays = fingerprints.reduce((acc, fp) => {
+      return acc + (fp.annualLeave || fp.medicalLeave || fp.officialLeave || fp.leaveCompensation ? 1 : 0);
+    }, 0);
+
+    console.log(`Attendance stats for ${code}: totalWorkDays=${totalWorkDays}, absences=${absences}, annualLeave=${annualLeave}, medicalLeave=${medicalLeave}, totalLeaveDays=${totalLeaveDays}`);
+
+    return { totalWorkDays, absences, annualLeave, medicalLeave, totalLeaveDays };
+  } catch (error) {
+    console.error(`Error calculating attendance stats for code ${code}:`, error.message);
+    throw error;
+  }
 };
 
 // التحقق قبل الحفظ
@@ -144,55 +197,22 @@ monthlyBonusReportSchema.pre('save', async function (next) {
     this.dateFrom = startDate.toJSDate();
     this.dateTo = endDate.toJSDate();
 
-    // جلب بيانات الحضور من Fingerprint
-    const fingerprints = await Fingerprint.find({
-      code: this.code,
-      date: { $gte: startDate.toJSDate(), $lte: endDate.toJSDate() },
-    });
-
-    // حساب أيام العمل والغياب والإجازات
-    const workDaysPerWeek = this.workDaysPerWeek || 6;
-    const isWeeklyLeaveDay = (date) => {
-      const dayOfWeek = DateTime.fromJSDate(date, { zone: 'Africa/Cairo' }).weekday;
-      return (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
-             (workDaysPerWeek === 6 && dayOfWeek === 5);
-    };
-
-    this.totalWorkDays = fingerprints.reduce((acc, fp) => {
-      const isWorkDay = !fp.absence &&
-                        !fp.annualLeave &&
-                        !fp.medicalLeave &&
-                        !fp.officialLeave &&
-                        fp.leaveCompensation === 0 &&
-                        fp.appropriateValue === 0 &&
-                        !isWeeklyLeaveDay(fp.date);
-      return acc + (isWorkDay ? 1 : 0);
-    }, 0);
-
-    this.absences = fingerprints.reduce((acc, fp) => acc + (fp.absence ? 1 : 0), 0);
-    this.annualLeave = fingerprints.reduce((acc, fp) => acc + (fp.annualLeave ? 1 : 0), 0);
-    this.totalLeaveDays = fingerprints.reduce((acc, fp) => {
-      return acc + (fp.annualLeave || fp.medicalLeave || fp.officialLeave || fp.leaveCompensation ? 1 : 0);
-    }, 0);
+    // تحديث بيانات الحضور
+    const attendanceStats = await calculateAttendanceStats(this.code, startDate, endDate);
+    this.totalWorkDays = attendanceStats.totalWorkDays;
+    this.absences = attendanceStats.absences;
+    this.annualLeave = attendanceStats.annualLeave;
+    this.medicalLeave = attendanceStats.medicalLeave;
+    this.totalLeaveDays = attendanceStats.totalLeaveDays;
 
     // التحقق من القيم الرقمية
     if (this.tieUpValue < 0) throw new Error('قيمة التربيط يجب ألا تكون سالبة');
     if (this.productionValue < 0) throw new Error('قيمة الإنتاج يجب ألا تكون سالبة');
     if (this.advances < 0) throw new Error('السلف يجب ألا تكون سالبة');
     if (this.deductions < 0) throw new Error('الاستقطاعات يجب ألا تكون سالبة');
+    if (this.netBonus < 0) throw new Error('صافي المكافأة يجب ألا يكون سالبًا');
 
-    // حساب صافي المكافأة
-    this.netBonus = calculateNetBonus(
-      this.baseBonus,
-      this.bonusPercentage,
-      this.absences,
-      this.tieUpValue,
-      this.productionValue,
-      this.advances,
-      this.deductions
-    );
-
-    console.log(`Calculated attendance and netBonus for report ${this.code}: totalWorkDays=${this.totalWorkDays}, absences=${this.absences}, annualLeave=${this.annualLeave}, totalLeaveDays=${this.totalLeaveDays}, netBonus=${this.netBonus}`);
+    console.log(`Calculated attendance for report ${this.code}: totalWorkDays=${this.totalWorkDays}, absences=${this.absences}, annualLeave=${this.annualLeave}, medicalLeave=${this.medicalLeave}, totalLeaveDays=${this.totalLeaveDays}, netBonus=${this.netBonus}`);
     next();
   } catch (err) {
     console.error(`Error in pre-save middleware for report ${this.code}:`, err.message);
@@ -222,25 +242,30 @@ monthlyBonusReportSchema.pre('findOneAndUpdate', async function (next) {
       update.$set.dateTo = endDate.toJSDate();
     }
 
-    // التحقق من وجود التقرير
-    const existingReport = await this.model.findOne({
-      code: query.code,
-      dateFrom: startDate.toJSDate(),
-      dateTo: endDate.toJSDate(),
-    });
-
-    if (!existingReport) {
-      throw new Error(`التقرير غير موجود لكود ${query.code} من ${startDate.toISODate()} إلى ${endDate.toISODate()}`);
-    }
-
     // جلب بيانات الموظف
     const user = await User.findOne({ code: query.code });
     if (!user) {
       throw new Error(`لا يوجد مستخدم بكود ${query.code}`);
     }
 
-    // التحقق من القيم الرقمية
+    // تحديث بيانات الحضور
+    const attendanceStats = await calculateAttendanceStats(query.code, startDate, endDate);
     if (update.$set) {
+      update.$set.totalWorkDays = attendanceStats.totalWorkDays;
+      update.$set.absences = attendanceStats.absences;
+      update.$set.annualLeave = attendanceStats.annualLeave;
+      update.$set.medicalLeave = attendanceStats.medicalLeave;
+      update.$set.totalLeaveDays = attendanceStats.totalLeaveDays;
+
+      // تحديث بيانات الموظف إذا لزم الأمر
+      update.$set.employeeName = user.fullName || 'غير معروف';
+      update.$set.department = user.department || '';
+      update.$set.baseBonus = Number(user.baseBonus || 0);
+      update.$set.bonusPercentage = Number(user.bonusPercentage || 0);
+      update.$set.workDaysPerWeek = Number(user.workDaysPerWeek || 6);
+      update.$set.advances = Number(update.$set.advances || user.advances || 0);
+
+      // التحقق من القيم الرقمية
       if (update.$set.tieUpValue !== undefined && Number(update.$set.tieUpValue) < 0) {
         throw new Error('قيمة التربيط يجب ألا تكون سالبة');
       }
@@ -253,67 +278,15 @@ monthlyBonusReportSchema.pre('findOneAndUpdate', async function (next) {
       if (update.$set.deductions !== undefined && Number(update.$set.deductions) < 0) {
         throw new Error('الاستقطاعات يجب ألا تكون سالبة');
       }
+      if (update.$set.netBonus !== undefined && Number(update.$set.netBonus) < 0) {
+        throw new Error('صافي المكافأة يجب ألا يكون سالبًا');
+      }
     }
 
-    // جلب بيانات الحضور من Fingerprint
-    const fingerprints = await Fingerprint.find({
-      code: query.code,
-      date: { $gte: startDate.toJSDate(), $lte: endDate.toJSDate() },
-    });
-
-    // حساب أيام العمل والغياب والإجازات
-    const workDaysPerWeek = user.workDaysPerWeek || existingReport.workDaysPerWeek || 6;
-    const isWeeklyLeaveDay = (date) => {
-      const dayOfWeek = DateTime.fromJSDate(date, { zone: 'Africa/Cairo' }).weekday;
-      return (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
-             (workDaysPerWeek === 6 && dayOfWeek === 5);
-    };
-
-    const totalWorkDays = fingerprints.reduce((acc, fp) => {
-      const isWorkDay = !fp.absence &&
-                        !fp.annualLeave &&
-                        !fp.medicalLeave &&
-                        !fp.officialLeave &&
-                        fp.leaveCompensation === 0 &&
-                        fp.appropriateValue === 0 &&
-                        !isWeeklyLeaveDay(fp.date);
-      return acc + (isWorkDay ? 1 : 0);
-    }, 0);
-
-    const absences = fingerprints.reduce((acc, fp) => acc + (fp.absence ? 1 : 0), 0);
-    const annualLeave = fingerprints.reduce((acc, fp) => acc + (fp.annualLeave ? 1 : 0), 0);
-    const totalLeaveDays = fingerprints.reduce((acc, fp) => {
-      return acc + (fp.annualLeave || fp.medicalLeave || fp.officialLeave || fp.leaveCompensation ? 1 : 0);
-    }, 0);
-
-    // تحديث الحقول
-    if (update.$set) {
-      update.$set.totalWorkDays = totalWorkDays;
-      update.$set.absences = absences;
-      update.$set.annualLeave = annualLeave;
-      update.$set.totalLeaveDays = totalLeaveDays;
-      update.$set.employeeName = user.fullName || existingReport.employeeName || 'غير معروف';
-      update.$set.department = user.department || existingReport.department || '';
-      update.$set.baseBonus = Number(user.baseBonus || existingReport.baseBonus || 0);
-      update.$set.bonusPercentage = Number(user.bonusPercentage || existingReport.bonusPercentage || 0);
-      update.$set.workDaysPerWeek = Number(user.workDaysPerWeek || existingReport.workDaysPerWeek || 6);
-
-      // حساب صافي المكافأة
-      update.$set.netBonus = calculateNetBonus(
-        update.$set.baseBonus || existingReport.baseBonus || user.baseBonus || 0,
-        update.$set.bonusPercentage || existingReport.bonusPercentage || user.bonusPercentage || 0,
-        absences,
-        update.$set.tieUpValue !== undefined ? Number(update.$set.tieUpValue) : existingReport.tieUpValue,
-        update.$set.productionValue !== undefined ? Number(update.$set.productionValue) : existingReport.productionValue,
-        update.$set.advances !== undefined ? Number(update.$set.advances) : existingReport.advances || user.advances || 0,
-        update.$set.deductions !== undefined ? Number(update.$set.deductions) : existingReport.deductions || 0
-      );
-    }
-
-    console.log(`Pre-update calculated for code ${query.code} from ${startDate.toISODate()} to ${endDate.toISODate()}: totalWorkDays=${totalWorkDays}, absences=${absences}, annualLeave=${annualLeave}, totalLeaveDays=${totalLeaveDays}, netBonus=${update.$set.netBonus}`);
+    console.log(`Updating report for code ${query.code} from ${startDate.toISODate()} to ${endDate.toISODate()}:`, update.$set);
     next();
   } catch (err) {
-    console.error(`Error in pre-update middleware for code ${query.code}:`, err.message);
+    console.error(`Error in pre-findOneAndUpdate middleware for report ${query.code}:`, err.message);
     next(err);
   }
 });

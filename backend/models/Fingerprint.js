@@ -1,6 +1,8 @@
+// backend/models/Fingerprint.js
 import mongoose from 'mongoose';
 import { DateTime } from 'luxon';
 import User from './User.js';
+import MonthlyBonusReport from './MonthlyBonusReport.js';
 import cron from 'node-cron';
 
 const isWeeklyLeaveDay = (date, workDaysPerWeek) => {
@@ -240,6 +242,28 @@ fingerprintSchema.pre('deleteOne', { document: true, query: false }, async funct
     next();
   } catch (err) {
     console.error(`Error in pre-deleteOne middleware for ${this.code}:`, err.message, err.stack);
+    next(err);
+  }
+});
+
+fingerprintSchema.pre('deleteMany', async function (next) {
+  try {
+    const query = this.getQuery();
+    const startDate = query.date?.$gte ? DateTime.fromJSDate(query.date.$gte, { zone: 'Africa/Cairo' }).startOf('month').toJSDate() : null;
+    const endDate = query.date?.$lte ? DateTime.fromJSDate(query.date.$lte, { zone: 'Africa/Cairo' }).endOf('month').toJSDate() : null;
+    const code = query.code;
+
+    if (code && startDate && endDate) {
+      const deletedReports = await MonthlyBonusReport.deleteMany({
+        code,
+        dateFrom: startDate,
+        dateTo: endDate,
+      });
+      console.log(`Deleted ${deletedReports.deletedCount} reports for code ${code} from ${startDate} to ${endDate} due to fingerprint deletion`);
+    }
+    next();
+  } catch (err) {
+    console.error(`Error in pre-deleteMany middleware:`, err.message);
     next(err);
   }
 });

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../components/AuthProvider';
 import NavBar from '../components/NavBar';
@@ -100,15 +100,62 @@ const MonthlyBonusReport = () => {
     setTimeout(() => setShowSuccess(false), 2000);
   };
 
-  const calculateNetBonus = (user, absences, tieUpValue, productionValue, advances, deductions) => {
-    const baseBonus = Number(user.baseBonus || 0);
-    const bonusPercentage = Number(user.bonusPercentage || 0);
-    const bonus = baseBonus * (1 + bonusPercentage / 100);
-    const dailyBonus = bonus / 30;
-    const absenceDeduction = Number(absences || 0) * dailyBonus;
-    const adjustedBonus = bonus - absenceDeduction;
-    const netBonus = adjustedBonus + Number(tieUpValue || 0) + Number(productionValue || 0) - Number(advances || 0) - Number(deductions || 0);
-    return Math.max(0, netBonus).toFixed(2);
+  const refreshData = async () => {
+    if (!dateFrom || !dateTo) return;
+    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('month');
+    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('month');
+    if (!startDate.isValid || !endDate.isValid) return;
+    if (startDate > endDate) return;
+
+    setLoading(true);
+    setError('');
+    try {
+      const endpoint = currentUser.role === 'admin' ? '/api/bonus-reports' : '/api/bonus-reports/me';
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}${endpoint}`, {
+        params: {
+          dateFrom: startDate.toISODate(),
+          dateTo: endDate.toISODate(),
+          ...(currentUser.role === 'admin' && searchCode && { code: searchCode }),
+        },
+        headers: { 
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Cache-Control': 'no-cache',
+        },
+      });
+
+      const reportData = currentUser.role === 'admin' ? 
+        (Array.isArray(response.data.reports) ? response.data.reports : [response.data]) :
+        [response.data.report];
+
+      setUsers(reportData.map((report) => ({
+        code: report.code || '',
+        employeeName: report.employeeName || 'غير معروف',
+        department: report.department || '',
+        baseBonus: Number(report.baseBonus || 0),
+        bonusPercentage: Number(report.bonusPercentage || 0),
+        workDaysPerWeek: Number(report.workDaysPerWeek || 6),
+        totalWorkDays: Number(report.totalWorkDays || 0),
+        absences: Number(report.absences || 0),
+        annualLeave: Number(report.annualLeave || 0),
+        medicalLeave: Number(report.medicalLeave || 0),
+        totalLeaveDays: Number(report.totalLeaveDays || 0),
+        tieUpValue: Number(report.tieUpValue || 0),
+        productionValue: Number(report.productionValue || 0),
+        advances: Number(report.advances || 0),
+        deductions: Number(report.deductions || 0),
+        netBonus: Number(report.netBonus || 0),
+        dateFrom: DateTime.fromJSDate(new Date(report.dateFrom)).toISODate(),
+        dateTo: DateTime.fromJSDate(new Date(report.dateTo)).toISODate(),
+      })));
+      triggerSuccessAnimation();
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+      console.error('Error details:', err.response?.data);
+      setError(`خطأ أثناء تحديث البيانات: ${errorMsg}`);
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSearch = async () => {
@@ -117,8 +164,8 @@ const MonthlyBonusReport = () => {
       return;
     }
 
-    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('day');
-    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('day');
+    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('month');
+    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('month');
 
     if (!startDate.isValid || !endDate.isValid) {
       setError('تاريخ البداية أو النهاية غير صالح');
@@ -140,7 +187,10 @@ const MonthlyBonusReport = () => {
           dateTo: endDate.toISODate(),
           ...(currentUser.role === 'admin' && searchCode && { code: searchCode }),
         },
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { 
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Cache-Control': 'no-cache',
+        },
       });
 
       const reportData = currentUser.role === 'admin' ? 
@@ -148,7 +198,7 @@ const MonthlyBonusReport = () => {
         [response.data.report];
 
       setUsers(reportData.map((report) => ({
-        ...report,
+        code: report.code || '',
         employeeName: report.employeeName || 'غير معروف',
         department: report.department || '',
         baseBonus: Number(report.baseBonus || 0),
@@ -157,6 +207,7 @@ const MonthlyBonusReport = () => {
         totalWorkDays: Number(report.totalWorkDays || 0),
         absences: Number(report.absences || 0),
         annualLeave: Number(report.annualLeave || 0),
+        medicalLeave: Number(report.medicalLeave || 0),
         totalLeaveDays: Number(report.totalLeaveDays || 0),
         tieUpValue: Number(report.tieUpValue || 0),
         productionValue: Number(report.productionValue || 0),
@@ -169,6 +220,7 @@ const MonthlyBonusReport = () => {
       triggerSuccessAnimation();
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+      console.error('Error details:', err.response?.data);
       setError(`خطأ أثناء جلب البيانات: ${errorMsg}`);
       setUsers([]);
     } finally {
@@ -182,8 +234,8 @@ const MonthlyBonusReport = () => {
       return;
     }
 
-    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('day');
-    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('day');
+    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('month');
+    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('month');
 
     if (!startDate.isValid || !endDate.isValid) {
       setError('تاريخ البداية أو النهاية غير صالح');
@@ -208,13 +260,16 @@ const MonthlyBonusReport = () => {
           dateFrom: startDate.toISODate(),
           dateTo: endDate.toISODate(),
         },
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { 
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Cache-Control': 'no-cache',
+        },
       });
 
       const reportData = Array.isArray(response.data.reports) ? response.data.reports : [response.data];
 
       setUsers(reportData.map((report) => ({
-        ...report,
+        code: report.code || '',
         employeeName: report.employeeName || 'غير معروف',
         department: report.department || '',
         baseBonus: Number(report.baseBonus || 0),
@@ -223,6 +278,7 @@ const MonthlyBonusReport = () => {
         totalWorkDays: Number(report.totalWorkDays || 0),
         absences: Number(report.absences || 0),
         annualLeave: Number(report.annualLeave || 0),
+        medicalLeave: Number(report.medicalLeave || 0),
         totalLeaveDays: Number(report.totalLeaveDays || 0),
         tieUpValue: Number(report.tieUpValue || 0),
         productionValue: Number(report.productionValue || 0),
@@ -236,6 +292,7 @@ const MonthlyBonusReport = () => {
       triggerSuccessAnimation();
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+      console.error('Error details:', err.response?.data);
       setError(`خطأ أثناء جلب جميع البيانات: ${errorMsg}`);
       setUsers([]);
     } finally {
@@ -255,25 +312,16 @@ const MonthlyBonusReport = () => {
       productionValue: Number(userData.productionValue || 0).toFixed(2),
       advances: Number(userData.advances || 0).toFixed(2),
       deductions: Number(userData.deductions || 0).toFixed(2),
-      netBonus: Number(userData.netBonus || 0).toFixed(2),
     });
     setError('');
   };
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditForm((prev) => {
-      const updatedForm = { ...prev, [name]: value };
-      const netBonus = calculateNetBonus(
-        editingUser,
-        editingUser.absences,
-        Number(updatedForm.tieUpValue) || 0,
-        Number(updatedForm.productionValue) || 0,
-        Number(updatedForm.advances) || 0,
-        Number(updatedForm.deductions) || 0
-      );
-      return { ...updatedForm, netBonus };
-    });
+    setEditForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleEditSubmit = async (e) => {
@@ -288,8 +336,8 @@ const MonthlyBonusReport = () => {
       return;
     }
 
-    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('day');
-    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('day');
+    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('month');
+    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('month');
 
     if (!startDate.isValid || !endDate.isValid) {
       setError('تاريخ البداية أو النهاية غير صالح');
@@ -301,43 +349,79 @@ const MonthlyBonusReport = () => {
       return;
     }
 
+    const { tieUpValue, productionValue, advances, deductions } = editForm;
+
+    if (Number(tieUpValue) < 0) {
+      setError('قيمة التربيط لا يمكن أن تكون سالبة');
+      return;
+    }
+    if (Number(productionValue) < 0) {
+      setError('قيمة الإنتاج لا يمكن أن تكون سالبة');
+      return;
+    }
+    if (Number(advances) < 0) {
+      setError('السلف لا يمكن أن تكون سالبة');
+      return;
+    }
+    if (Number(deductions) < 0) {
+      setError('الاستقطاعات لا يمكن أن تكون سالبة');
+      return;
+    }
+
+    if (Number(tieUpValue) < Number(editingUser.tieUpValue)) {
+      setError('قيمة التربيط يجب ألا تقل عن القيمة الحالية');
+      return;
+    }
+    if (Number(deductions) < Number(editingUser.deductions)) {
+      setError('الاستقطاعات يجب ألا تقل عن القيمة الحالية');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
-      const { tieUpValue, productionValue, advances, deductions } = editForm;
+      const requestData = {
+        code: editForm.code,
+        tieUpValue: Number(tieUpValue),
+        productionValue: Number(productionValue),
+        advances: Number(advances),
+        deductions: Number(deductions),
+        dateFrom: startDate.toISODate(),
+        dateTo: endDate.toISODate(),
+      };
 
-      if (Number(tieUpValue) < 0) {
-        setError('قيمة التربيط لا يمكن أن تكون سالبة');
-        return;
-      }
-      if (Number(productionValue) < 0) {
-        setError('قيمة الإنتاج لا يمكن أن تكون سالبة');
-        return;
-      }
-      if (Number(advances) < 0) {
-        setError('السلف لا يمكن أن تكون سالبة');
-        return;
-      }
-      if (Number(deductions) < 0) {
-        setError('الاستقطاعات لا يمكن أن تكون سالبة');
-        return;
-      }
+      console.log('Request Data:', requestData);
 
-      const response = await axios.put(
-        `${process.env.REACT_APP_API_URL}/api/bonus-reports/${editForm.code}`,
-        {
-          code: editForm.code,
-          tieUpValue: Number(tieUpValue),
-          productionValue: Number(productionValue),
-          advances: Number(advances),
-          deductions: Number(deductions),
-          dateFrom: startDate.toISODate(),
-          dateTo: endDate.toISODate(),
-        },
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      let response;
+      try {
+        response = await axios.put(
+          `${process.env.REACT_APP_API_URL}/api/bonus-reports/${editForm.code}`,
+          requestData,
+          {
+            headers: { 
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+              'Cache-Control': 'no-cache',
+            },
+          }
+        );
+      } catch (err) {
+        if (err.response?.status === 404 && err.response?.data?.error === 'التقرير غير موجود') {
+          response = await axios.post(
+            `${process.env.REACT_APP_API_URL}/api/bonus-reports`,
+            requestData,
+            {
+              headers: { 
+                Authorization: `Bearer ${localStorage.getItem('token')}`,
+                'Cache-Control': 'no-cache',
+              },
+            }
+          );
+        } else {
+          throw err;
         }
-      );
+      }
+
+      console.log('Server Response:', response.data);
 
       setUsers((prev) =>
         prev.map((u) =>
@@ -346,11 +430,11 @@ const MonthlyBonusReport = () => {
           u.dateTo === endDate.toISODate()
             ? {
                 ...u,
-                tieUpValue: Number(response.data.report.tieUpValue || u.tieUpValue),
-                productionValue: Number(response.data.report.productionValue || u.productionValue),
-                advances: Number(response.data.report.advances || u.advances),
-                deductions: Number(response.data.report.deductions || u.deductions),
-                netBonus: Number(response.data.report.netBonus || u.netBonus),
+                tieUpValue: Number(response.data.report.tieUpValue || tieUpValue),
+                productionValue: Number(response.data.report.productionValue || productionValue),
+                advances: Number(response.data.report.advances || advances),
+                deductions: Number(response.data.report.deductions || deductions),
+                netBonus: Number(response.data.report.netBonus || 0),
               }
             : u
         )
@@ -359,8 +443,10 @@ const MonthlyBonusReport = () => {
       setEditingUser(null);
       setEditForm({});
       triggerSuccessAnimation();
+      await refreshData(); // تحديث البيانات بعد التعديل
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+      console.error('Edit Error:', errorMsg);
       setError(`خطأ أثناء التعديل: ${errorMsg}`);
     } finally {
       setLoading(false);
@@ -384,8 +470,8 @@ const MonthlyBonusReport = () => {
       return;
     }
 
-    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('day');
-    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('day');
+    const startDate = DateTime.fromISO(dateFrom, { zone: 'Africa/Cairo' }).startOf('month');
+    const endDate = DateTime.fromISO(dateTo, { zone: 'Africa/Cairo' }).endOf('month');
 
     if (!startDate.isValid || !endDate.isValid) {
       setError('تاريخ البداية أو النهاية غير صالح');
@@ -414,14 +500,19 @@ const MonthlyBonusReport = () => {
               dateTo: endDate.toISODate(),
             },
             {
-              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+              headers: { 
+                Authorization: `Bearer ${localStorage.getItem('token')}`,
+                'Cache-Control': 'no-cache',
+              },
             }
           )
         )
       );
       triggerSuccessAnimation();
+      await refreshData(); // تحديث البيانات بعد الحفظ
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+      console.error('Save Error:', errorMsg);
       setError(`خطأ أثناء حفظ التقرير: ${errorMsg}`);
     } finally {
       setLoading(false);
@@ -437,6 +528,7 @@ const MonthlyBonusReport = () => {
       'إجمالي أيام العمل',
       'الغياب',
       'الإجازة السنوية',
+      'الإجازة الطبية',
       'إجمالي الإجازات',
       'قيمة التربيط',
       'قيمة الإنتاج',
@@ -453,6 +545,7 @@ const MonthlyBonusReport = () => {
       user.totalWorkDays,
       user.absences,
       user.annualLeave,
+      user.medicalLeave,
       user.totalLeaveDays,
       Number(user.tieUpValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }),
       Number(user.productionValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }),
@@ -474,7 +567,7 @@ const MonthlyBonusReport = () => {
 
     const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
 
-    worksheet['!rtl'] = false; // تعيين الاتجاه من اليسار إلى اليمين
+    worksheet['!rtl'] = false;
     worksheet['!freeze'] = { xSplit: 0, ySplit: 3 };
 
     const colWidths = headers.map((header, i) => {
@@ -529,7 +622,7 @@ const MonthlyBonusReport = () => {
             },
             fill: { fgColor: { rgb: row % 2 === 0 ? 'F3F4F6' : 'FFFFFF' } },
           };
-          if ([currentUser.role === 'admin' ? 0 : 3, 1, 2, 3, 4, 11].includes(col)) {
+          if ([currentUser.role === 'admin' ? 0 : 3, 1, 2, 3, 4, 9, 10, 11, 12].includes(col)) {
             worksheet[cellAddress].z = '#,##0.00';
           }
         }
@@ -590,6 +683,7 @@ const MonthlyBonusReport = () => {
                     'إجمالي أيام العمل',
                     'الغياب',
                     'الإجازة السنوية',
+                    'الإجازة الطبية',
                     'إجمالي الإجازات',
                     'قيمة التربيط',
                     'قيمة الإنتاج',
@@ -605,7 +699,7 @@ const MonthlyBonusReport = () => {
                             alignment: 'center',
                           }),
                         ],
-                        width: { size: 100 / (currentUser.role === 'admin' ? 15 : 12), type: WidthType.PERCENTAGE },
+                        width: { size: 100 / (currentUser.role === 'admin' ? 16 : 13), type: WidthType.PERCENTAGE },
                         margins: { top: 100, bottom: 100, left: 100, right: 100 },
                         shading: { fill: '1E3A8A', type: ShadingType.SOLID },
                       })
@@ -626,6 +720,7 @@ const MonthlyBonusReport = () => {
                         user.totalWorkDays.toString(),
                         user.absences.toString(),
                         user.annualLeave.toString(),
+                        user.medicalLeave.toString(),
                         user.totalLeaveDays.toString(),
                         Number(user.tieUpValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }),
                         Number(user.productionValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }),
@@ -641,7 +736,7 @@ const MonthlyBonusReport = () => {
                                 alignment: 'center',
                               }),
                             ],
-                            width: { size: 100 / (currentUser.role === 'admin' ? 15 : 12), type: WidthType.PERCENTAGE },
+                            width: { size: 100 / (currentUser.role === 'admin' ? 16 : 13), type: WidthType.PERCENTAGE },
                             margins: { top: 100, bottom: 100, left: 100, right: 100 },
                             shading: { fill: index % 2 === 0 ? 'F3F4F6' : 'FFFFFF', type: ShadingType.SOLID },
                           })
@@ -657,6 +752,7 @@ const MonthlyBonusReport = () => {
                     users.reduce((sum, user) => sum + Number(user.totalWorkDays || 0), 0).toString(),
                     users.reduce((sum, user) => sum + Number(user.absences || 0), 0).toString(),
                     users.reduce((sum, user) => sum + Number(user.annualLeave || 0), 0).toString(),
+                    users.reduce((sum, user) => sum + Number(user.medicalLeave || 0), 0).toString(),
                     users.reduce((sum, user) => sum + Number(user.totalLeaveDays || 0), 0).toString(),
                     users.reduce((sum, user) => sum + Number(user.tieUpValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 }),
                     users.reduce((sum, user) => sum + Number(user.productionValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 }),
@@ -672,7 +768,7 @@ const MonthlyBonusReport = () => {
                             alignment: 'center',
                           }),
                         ],
-                        width: { size: 100 / (currentUser.role === 'admin' ? 15 : 12), type: WidthType.PERCENTAGE },
+                        width: { size: 100 / (currentUser.role === 'admin' ? 16 : 13), type: WidthType.PERCENTAGE },
                         margins: { top: 100, bottom: 100, left: 100, right: 100 },
                         shading: { fill: 'BFDBFE', type: ShadingType.SOLID },
                       })
@@ -697,6 +793,7 @@ const MonthlyBonusReport = () => {
       <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
         <AnimatePresence>
           {loading && <LoadingSpinner />}
+          {showSuccess && <SuccessCheckmark />}
         </AnimatePresence>
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -710,435 +807,284 @@ const MonthlyBonusReport = () => {
           </h2>
           {error && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-right"
             >
               {error}
             </motion.div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            {currentUser.role === 'admin' && (
+              <div>
+                <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                  كود الموظف
+                </label>
+                <input
+                  type="text"
+                  value={searchCode}
+                  onChange={(e) => setSearchCode(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-right"
+                  placeholder="أدخل كود الموظف"
+                />
+              </div>
+            )}
             <div>
-              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
-                كود الموظف
-              </label>
-              <input
-                type="text"
-                value={searchCode}
-                onChange={(e) => currentUser.role === 'admin' ? setSearchCode(e.target.value) : null}
-                className={`w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100 ${
-                  currentUser.role !== 'admin' ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                placeholder="أدخل كود الموظف"
-                disabled={loading || currentUser.role !== 'admin'}
-              />
-            </div>
-            <div>
-              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
                 من تاريخ
               </label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
-                disabled={loading}
+                className="w-full p-2 border border-gray-300 rounded-lg text-right"
               />
             </div>
             <div>
-              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
                 إلى تاريخ
               </label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
-                disabled={loading}
+                className="w-full p-2 border border-gray-300 rounded-lg text-right"
               />
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-3 mt-6">
-            <motion.button
+          <div className="flex flex-col sm:flex-row gap-4 justify-end">
+            <button
               onClick={handleSearch}
-              disabled={loading}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                loading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
+              className="bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-600 transition"
             >
-              {loading ? 'جارٍ البحث...' : 'بحث'}
-            </motion.button>
+              بحث
+            </button>
             {currentUser.role === 'admin' && (
-              <motion.button
+              <button
                 onClick={handleShowAll}
-                disabled={loading}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full sm:w-auto bg-gray-500 text-white px-5 py-2.5 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                  loading ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
               >
-                {loading ? 'جارٍ الجلب...' : 'عرض الكل'}
-              </motion.button>
+                عرض الكل
+              </button>
             )}
-            {currentUser.role === 'admin' && (
-              <motion.button
-                onClick={handleExportExcel}
-                disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full sm:w-auto bg-green-500 text-white px-5 py-2.5 rounded-md hover:bg-green-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                  loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                تصدير إكسل
-              </motion.button>
-            )}
-            {currentUser.role === 'admin' && (
-              <motion.button
-                onClick={handleExportWord}
-                disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full sm:w-auto bg-indigo-500 text-white px-5 py-2.5 rounded-md hover:bg-indigo-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                  loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                تصدير وورد
-              </motion.button>
-            )}
-            {currentUser.role === 'admin' && (
-              <motion.button
+            {currentUser.role === 'admin' && users.length > 0 && (
+              <button
                 onClick={handleSaveReport}
-                disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                  loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition"
               >
-                {loading ? 'جارٍ الحفظ...' : 'حفظ التقرير'}
-              </motion.button>
+                حفظ التقرير
+              </button>
+            )}
+            {users.length > 0 && (
+              <>
+                <button
+                  onClick={handleExportExcel}
+                  className="bg-indigo-500 text-white px-4 py-2 rounded-lg hover:bg-indigo-600 transition"
+                >
+                  تصدير إلى Excel
+                </button>
+                <button
+                  onClick={handleExportWord}
+                  className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition"
+                >
+                  تصدير إلى Word
+                </button>
+                <button
+                  onClick={refreshData}
+                  className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition"
+                >
+                  تحديث البيانات
+                </button>
+              </>
             )}
           </div>
         </motion.div>
 
-        <AnimatePresence>
-          {editingUser && currentUser.role === 'admin' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
-            >
-              <motion.div
-                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h2 className="text-lg font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
-                  <SettingsIcon className="h-6 w-6 text-teal-500" />
-                  تعديل بيانات التقرير
-                </h2>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
-                  >
-                    {error}
-                  </motion.div>
-                )}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
-                      كود الموظف
-                    </label>
-                    <input
-                      type="text"
-                      name="code"
-                      value={editForm.code}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm bg-gray-50 cursor-not-allowed"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
-                      قيمة التربيط
-                    </label>
-                    <input
-                      type="number"
-                      name="tieUpValue"
-                      value={editForm.tieUpValue}
-                      onChange={handleEditChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
-                      min="0"
-                      step="0.01"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
-                      قيمة الإنتاج
-                    </label>
-                    <input
-                      type="number"
-                      name="productionValue"
-                      value={editForm.productionValue}
-                      onChange={handleEditChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
-                      min="0"
-                      step="0.01"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
-                      السلف
-                    </label>
-                    <input
-                      type="number"
-                      name="advances"
-                      value={editForm.advances}
-                      onChange={handleEditChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
-                      min="0"
-                      step="0.01"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
-                      الاستقطاعات
-                    </label>
-                    <input
-                      type="number"
-                      name="deductions"
-                      value={editForm.deductions}
-                      onChange={handleEditChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
-                      min="0"
-                      step="0.01"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
-                      صافي الحافز
-                    </label>
-                    <input
-                      type="text"
-                      value={Number(editForm.netBonus).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
-                      readOnly
-                    />
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <motion.button
-                      onClick={handleEditSubmit}
-                      disabled={loading}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                        loading ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      {loading ? 'جارٍ الحفظ...' : 'حفظ'}
-                    </motion.button>
-                    <motion.button
-                      type="button"
-                      onClick={handleEditCancel}
-                      disabled={loading}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`w-full sm:w-auto bg-gray-500 text-white px-5 py-2.5 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                        loading ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      إلغاء
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {showSuccess && <SuccessCheckmark onComplete={() => setShowSuccess(false)} />}
-        </AnimatePresence>
-
-        {users.length > 0 ? (
+        {users.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto"
           >
-            <h2 className="text-lg font-bold text-gray-900 mb-6 text-right">
-              تقرير الحافز الشهري
-            </h2>
-            <div className="overflow-x-auto max-h-[60vh] rounded-lg">
-              <table className="w-full text-right text-sm border-collapse" dir="rtl">
-                <thead>
-                  <tr className="bg-teal-500 text-white sticky top-0 z-10">
-                    {[
-                      ...(currentUser.role === 'admin' ? ['كود الموظف', 'الاسم', 'القسم'] : []),
-                      'الحافز الأساسي',
-                      'نسبة الحافز',
-                      'أيام العمل الأسبوعية',
-                      'إجمالي أيام العمل',
-                      'الغياب',
-                      'الإجازة السنوية',
-                      'إجمالي الإجازات',
-                      'قيمة التربيط',
-                      'قيمة الإنتاج',
-                      'السلف',
-                      'الاستقطاعات',
-                      'صافي الحافز',
-                      ...(currentUser.role === 'admin' ? ['إجراءات'] : []),
-                    ].map((header) => (
-                      <th
-                        key={header}
-                        className="p-3 font-semibold text-sm border-b border-gray-200 whitespace-nowrap"
-                      >
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user, index) => (
-                    <tr
-                      key={index}
-                      className={`${
-                        index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
-                      } hover:bg-teal-50 transition-all duration-200 border-b border-gray-100`}
-                    >
-                      {currentUser.role === 'admin' && (
-                        <>
-                          <td className="p-3 text-gray-700 whitespace-nowrap">{user.code}</td>
-                          <td className="p-3 text-gray-700">{user.employeeName}</td>
-                          <td className="p-3 text-gray-700">{user.department}</td>
-                        </>
-                      )}
-                      <td className="p-3 text-gray-700">
-                        {Number(user.baseBonus || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-gray-700">{Number(user.bonusPercentage || 0).toFixed(2)}%</td>
-                      <td className="p-3 text-gray-700 text-center">{user.workDaysPerWeek}</td>
-                      <td className="p-3 text-gray-700 text-center">{user.totalWorkDays}</td>
-                      <td className="p-3 text-gray-700 text-center">{user.absences}</td>
-                      <td className="p-3 text-gray-700 text-center">{user.annualLeave}</td>
-                      <td className="p-3 text-gray-700 text-center">{user.totalLeaveDays}</td>
-                      <td className="p-3 text-gray-700">
-                        {Number(user.tieUpValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-gray-700">
-                        {Number(user.productionValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-gray-700">
-                        {Number(user.advances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-gray-700">
-                        {Number(user.deductions || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-gray-800 font-semibold">
-                        {Number(user.netBonus || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      {currentUser.role === 'admin' && (
-                        <td className="p-3">
-                          <motion.button
-                            onClick={() => handleEditClick(user)}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm"
-                          >
-                            تعديل
-                          </motion.button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                  <tr className="bg-teal-100 font-semibold sticky bottom-0">
+            <table className="w-full text-right table-auto">
+              <thead>
+                <tr className="bg-teal-500 text-white">
+                  {currentUser.role === 'admin' && (
+                    <>
+                      <th className="p-3 font-semibold">كود الموظف</th>
+                      <th className="p-3 font-semibold">الاسم</th>
+                      <th className="p-3 font-semibold">القسم</th>
+                    </>
+                  )}
+                  <th className="p-3 font-semibold">الحافز الأساسي</th>
+                  <th className="p-3 font-semibold">نسبة الحافز</th>
+                  <th className="p-3 font-semibold">أيام العمل الأسبوعية</th>
+                  <th className="p-3 font-semibold">إجمالي أيام العمل</th>
+                  <th className="p-3 font-semibold">الغياب</th>
+                  <th className="p-3 font-semibold">الإجازة السنوية</th>
+                  <th className="p-3 font-semibold">الإجازة الطبية</th>
+                  <th className="p-3 font-semibold">إجمالي الإجازات</th>
+                  <th className="p-3 font-semibold">قيمة التربيط</th>
+                  <th className="p-3 font-semibold">قيمة الإنتاج</th>
+                  <th className="p-3 font-semibold">السلف</th>
+                  <th className="p-3 font-semibold">الاستقطاعات</th>
+                  <th className="p-3 font-semibold">صافي الحافز</th>
+                  {currentUser.role === 'admin' && (
+                    <th className="p-3 font-semibold">الإجراءات</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user, index) => (
+                  <tr
+                    key={`${user.code}-${user.dateFrom}`}
+                    className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                  >
                     {currentUser.role === 'admin' && (
                       <>
-                        <td className="p-3">-</td>
-                        <td className="p-3">الإجمالي</td>
-                        <td className="p-3">-</td>
+                        <td className="p-3">{user.code}</td>
+                        <td className="p-3">{user.employeeName}</td>
+                        <td className="p-3">{user.department}</td>
                       </>
                     )}
-                    <td className="p-3">-</td>
-                    <td className="p-3">-</td>
-                    <td className="p-3 text-center">
-                      {users.reduce((sum, user) => sum + Number(user.workDaysPerWeek || 0), 0)}
-                    </td>
-                    <td className="p-3 text-center">
-                      {users.reduce((sum, user) => sum + Number(user.totalWorkDays || 0), 0)}
-                    </td>
-                    <td className="p-3 text-center">
-                      {users.reduce((sum, user) => sum + Number(user.absences || 0), 0)}
-                    </td>
-                    <td className="p-3 text-center">
-                      {users.reduce((sum, user) => sum + Number(user.annualLeave || 0), 0)}
-                    </td>
-                    <td className="p-3 text-center">
-                      {users.reduce((sum, user) => sum + Number(user.totalLeaveDays || 0), 0)}
-                    </td>
-                    <td className="p-3">
-                      {users.reduce((sum, user) => sum + Number(user.tieUpValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-3">
-                      {users.reduce((sum, user) => sum + Number(user.productionValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-3">
-                      {users.reduce((sum, user) => sum + Number(user.advances || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-3">
-                      {users.reduce((sum, user) => sum + Number(user.deductions || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-3">
-                      {users.reduce((sum, user) => sum + Number(user.netBonus || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
-                    {currentUser.role === 'admin' && <td className="p-3">-</td>}
+                    <td className="p-3">{Number(user.baseBonus).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3">{Number(user.bonusPercentage).toFixed(2)}%</td>
+                    <td className="p-3">{user.workDaysPerWeek}</td>
+                    <td className="p-3">{user.totalWorkDays}</td>
+                    <td className="p-3">{user.absences}</td>
+                    <td className="p-3">{user.annualLeave}</td>
+                    <td className="p-3">{user.medicalLeave}</td>
+                    <td className="p-3">{user.totalLeaveDays}</td>
+                    <td className="p-3">{Number(user.tieUpValue).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3">{Number(user.productionValue).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3">{Number(user.advances).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3">{Number(user.deductions).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3">{Number(user.netBonus).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    {currentUser.role === 'admin' && (
+                      <td className="p-3">
+                        <button
+                          onClick={() => handleEditClick(user)}
+                          className="text-blue-500 hover:underline"
+                        >
+                          تعديل
+                        </button>
+                      </td>
+                    )}
                   </tr>
-                </tbody>
-              </table>
-            </div>
-            {currentUser.role === 'admin' && (
-              <motion.button
-                onClick={handleSaveReport}
-                disabled={loading || users.length === 0}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full mt-6 bg-teal-500 text-white py-3 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
-                  loading || users.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {loading ? 'جارٍ الحفظ...' : 'حفظ التقرير'}
-              </motion.button>
-            )}
+                ))}
+                <tr className="bg-blue-100 font-bold">
+                  {currentUser.role === 'admin' && (
+                    <>
+                      <td className="p-3">-</td>
+                      <td className="p-3">الإجمالي</td>
+                      <td className="p-3">-</td>
+                    </>
+                  )}
+                  <td className="p-3">-</td>
+                  <td className="p-3">-</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.workDaysPerWeek || 0), 0)}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.totalWorkDays || 0), 0)}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.absences || 0), 0)}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.annualLeave || 0), 0)}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.medicalLeave || 0), 0)}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.totalLeaveDays || 0), 0)}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.tieUpValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.productionValue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.advances || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.deductions || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                  <td className="p-3">{users.reduce((sum, user) => sum + Number(user.netBonus || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                  {currentUser.role === 'admin' && <td className="p-3">-</td>}
+                </tr>
+              </tbody>
+            </table>
           </motion.div>
-        ) : (
-          !loading && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center"
-            >
-              <p className="text-gray-600 text-sm">
-                {currentUser.role === 'admin'
-                  ? 'لا توجد تقارير حوافز متاحة لهذه الفترة أو كود الموظف. يرجى التحقق من البيانات المدخلة.'
-                  : 'لا توجد بيانات لتقرير حافزك في الفترة المحددة. يرجى تحديد الفترة الزمنية والضغط على "بحث".'}
-              </p>
-            </motion.div>
-          )
+        )}
+
+        {editingUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 text-right">
+                تعديل تقرير الموظف: {editingUser.employeeName}
+              </h3>
+              <form onSubmit={handleEditSubmit}>
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    قيمة التربيط
+                  </label>
+                  <input
+                    type="number"
+                    name="tieUpValue"
+                    value={editForm.tieUpValue}
+                    onChange={handleEditChange}
+                    step="0.01"
+                    min={Number(editingUser.tieUpValue || 0).toFixed(2)}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-right"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    قيمة الإنتاج
+                  </label>
+                  <input
+                    type="number"
+                    name="productionValue"
+                    value={editForm.productionValue}
+                    onChange={handleEditChange}
+                    step="0.01"
+                    min="0"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-right"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    السلف
+                  </label>
+                  <input
+                    type="number"
+                    name="advances"
+                    value={editForm.advances}
+                    onChange={handleEditChange}
+                    step="0.01"
+                    min="0"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-right"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                    الاستقطاعات
+                  </label>
+                  <input
+                    type="number"
+                    name="deductions"
+                    value={editForm.deductions}
+                    onChange={handleEditChange}
+                    step="0.01"
+                    min={Number(editingUser.deductions || 0).toFixed(2)}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-right"
+                  />
+                </div>
+                <div className="flex justify-end gap-4">
+                  <button
+                    type="submit"
+                    className="bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-600 transition"
+                  >
+                    حفظ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEditCancel}
+                    className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
+            </div>
+          </motion.div>
         )}
       </div>
     </div>

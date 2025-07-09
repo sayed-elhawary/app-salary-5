@@ -1,3 +1,4 @@
+// backend/routes/bonus-reports.js
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { DateTime } from 'luxon';
@@ -42,16 +43,6 @@ const adminMiddleware = async (req, res, next) => {
   next();
 };
 
-// دالة لحساب صافي المكافأة
-const calculateNetBonus = (baseBonus, bonusPercentage, absences, tieUpValue, productionValue, advances, deductions) => {
-  const bonus = Number(baseBonus || 0) * (Number(bonusPercentage || 0) / 100);
-  const dailyBonus = bonus / 30;
-  const absenceDeduction = Number(absences || 0) * dailyBonus;
-  const adjustedBonus = bonus - absenceDeduction;
-  const netBonus = adjustedBonus + Number(tieUpValue || 0) + Number(productionValue || 0) - Number(advances || 0) - Number(deductions || 0);
-  return Math.max(0, netBonus).toFixed(2);
-};
-
 // دالة لحساب بيانات الحضور من Fingerprint
 const calculateAttendanceStats = async (code, startDate, endDate) => {
   try {
@@ -59,6 +50,8 @@ const calculateAttendanceStats = async (code, startDate, endDate) => {
       code,
       date: { $gte: startDate.toJSDate(), $lte: endDate.toJSDate() },
     });
+
+    console.log(`Retrieved ${fingerprints.length} fingerprints for code ${code} from ${startDate.toISODate()} to ${endDate.toISODate()}`);
 
     const user = await User.findOne({ code });
     if (!user) {
@@ -68,30 +61,39 @@ const calculateAttendanceStats = async (code, startDate, endDate) => {
     const workDaysPerWeek = user.workDaysPerWeek || 6;
     const isWeeklyLeaveDay = (date) => {
       const dayOfWeek = DateTime.fromJSDate(date, { zone: 'Africa/Cairo' }).weekday;
-      return (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
-             (workDaysPerWeek === 6 && dayOfWeek === 5);
+      return (
+        (workDaysPerWeek === 5 && (dayOfWeek === 5 || dayOfWeek === 6)) ||
+        (workDaysPerWeek === 6 && dayOfWeek === 5)
+      );
     };
 
     let totalWorkDays = 0;
     let absences = 0;
     let annualLeave = 0;
+    let medicalLeave = 0;
 
     fingerprints.forEach((fp) => {
-      const isWorkDay = !fp.absence &&
-                        !fp.annualLeave &&
-                        !fp.medicalLeave &&
-                        !fp.officialLeave &&
-                        fp.leaveCompensation === 0 &&
-                        fp.appropriateValue === 0 &&
-                        !isWeeklyLeaveDay(fp.date);
+      const isWorkDay =
+        !fp.absence &&
+        !fp.annualLeave &&
+        !fp.medicalLeave &&
+        !fp.officialLeave &&
+        fp.leaveCompensation === 0 &&
+        fp.appropriateValue === 0 &&
+        !isWeeklyLeaveDay(fp.date);
       if (isWorkDay) totalWorkDays += 1;
       if (fp.absence) absences += 1;
       if (fp.annualLeave) annualLeave += 1;
+      if (fp.medicalLeave) medicalLeave += 1;
     });
 
-    const totalLeaveDays = annualLeave + fingerprints.filter(fp => fp.medicalLeave || fp.officialLeave).length;
+    const totalLeaveDays = fingerprints.reduce((acc, fp) => {
+      return acc + (fp.annualLeave || fp.medicalLeave || fp.officialLeave || fp.leaveCompensation ? 1 : 0);
+    }, 0);
 
-    return { totalWorkDays, absences, annualLeave, totalLeaveDays };
+    console.log(`Attendance stats for ${code}: totalWorkDays=${totalWorkDays}, absences=${absences}, annualLeave=${annualLeave}, medicalLeave=${medicalLeave}, totalLeaveDays=${totalLeaveDays}`);
+
+    return { totalWorkDays, absences, annualLeave, medicalLeave, totalLeaveDays };
   } catch (error) {
     console.error(`Error calculating attendance stats for code ${code}:`, error.message);
     throw error;
@@ -147,19 +149,22 @@ router.get('/me', authMiddleware, async (req, res) => {
         totalWorkDays: attendanceStats.totalWorkDays,
         absences: attendanceStats.absences,
         annualLeave: attendanceStats.annualLeave,
+        medicalLeave: attendanceStats.medicalLeave,
         totalLeaveDays: attendanceStats.totalLeaveDays,
         tieUpValue: 0,
         productionValue: 0,
         advances: Number(dbUser.advances || 0),
         deductions: 0,
-        netBonus: calculateNetBonus(
-          dbUser.baseBonus || 0,
-          dbUser.bonusPercentage || 0,
-          attendanceStats.absences,
-          0,
-          0,
-          dbUser.advances || 0,
-          0
+        netBonus: Number(
+          calculateNetBonus(
+            dbUser.baseBonus || 0,
+            dbUser.bonusPercentage || 0,
+            attendanceStats.absences,
+            0,
+            0,
+            dbUser.advances || 0,
+            0
+          )
         ),
         dateFrom: startDate.toJSDate(),
         dateTo: endDate.toJSDate(),
@@ -167,7 +172,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       };
     }
 
-    console.log(`Fetched report for user ${user.code} from ${dateFrom} to ${dateTo}`);
+    console.log(`Fetched report for user ${user.code} from ${dateFrom} to ${dateTo}: netBonus=${report.netBonus}`);
     res.status(200).json({ report });
   } catch (error) {
     console.error('Error fetching user report:', error.message);
@@ -215,37 +220,42 @@ router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
         return res.status(404).json({ error: 'لا يوجد مستخدمين مطابقين' });
       }
 
-      reports = await Promise.all(users.map(async (user) => {
-        const attendanceStats = await calculateAttendanceStats(user.code, startDate, endDate);
-        return {
-          code: user.code,
-          employeeName: user.fullName || 'غير معروف',
-          department: user.department || '',
-          baseBonus: Number(user.baseBonus || 0),
-          bonusPercentage: Number(user.bonusPercentage || 0),
-          workDaysPerWeek: Number(user.workDaysPerWeek || 6),
-          totalWorkDays: attendanceStats.totalWorkDays,
-          absences: attendanceStats.absences,
-          annualLeave: attendanceStats.annualLeave,
-          totalLeaveDays: attendanceStats.totalLeaveDays,
-          tieUpValue: 0,
-          productionValue: 0,
-          advances: Number(user.advances || 0),
-          deductions: 0,
-          netBonus: calculateNetBonus(
-            user.baseBonus || 0,
-            user.bonusPercentage || 0,
-            attendanceStats.absences,
-            0,
-            0,
-            user.advances || 0,
-            0
-          ),
-          dateFrom: startDate.toJSDate(),
-          dateTo: endDate.toJSDate(),
-          createdBy: req.user._id,
-        };
-      }));
+      reports = await Promise.all(
+        users.map(async (user) => {
+          const attendanceStats = await calculateAttendanceStats(user.code, startDate, endDate);
+          return {
+            code: user.code,
+            employeeName: user.fullName || 'غير معروف',
+            department: user.department || '',
+            baseBonus: Number(user.baseBonus || 0),
+            bonusPercentage: Number(user.bonusPercentage || 0),
+            workDaysPerWeek: Number(user.workDaysPerWeek || 6),
+            totalWorkDays: attendanceStats.totalWorkDays,
+            absences: attendanceStats.absences,
+            annualLeave: attendanceStats.annualLeave,
+            medicalLeave: attendanceStats.medicalLeave,
+            totalLeaveDays: attendanceStats.totalLeaveDays,
+            tieUpValue: 0,
+            productionValue: 0,
+            advances: Number(user.advances || 0),
+            deductions: 0,
+            netBonus: Number(
+              calculateNetBonus(
+                user.baseBonus || 0,
+                user.bonusPercentage || 0,
+                attendanceStats.absences,
+                0,
+                0,
+                user.advances || 0,
+                0
+              )
+            ),
+            dateFrom: startDate.toJSDate(),
+            dateTo: endDate.toJSDate(),
+            createdBy: req.user._id,
+          };
+        })
+      );
     }
 
     console.log(`Fetched ${reports.length} reports for query:`, query);
@@ -279,23 +289,41 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية' });
     }
 
+    if (tieUpValue !== undefined && Number(tieUpValue) < 0) {
+      console.error('Negative tieUpValue:', tieUpValue);
+      return res.status(400).json({ error: 'قيمة التربيط يجب ألا تكون سالبة' });
+    }
+    if (productionValue !== undefined && Number(productionValue) < 0) {
+      console.error('Negative productionValue:', productionValue);
+      return res.status(400).json({ error: 'قيمة الإنتاج يجب ألا تكون سالبة' });
+    }
+    if (advances !== undefined && Number(advances) < 0) {
+      console.error('Negative advances:', advances);
+      return res.status(400).json({ error: 'السلف يجب ألا تكون سالبة' });
+    }
+    if (deductions !== undefined && Number(deductions) < 0) {
+      console.error('Negative deductions:', deductions);
+      return res.status(400).json({ error: 'الاستقطاعات يجب ألا تكون سالبة' });
+    }
+
     const user = await User.findOne({ code });
     if (!user) {
       console.error(`User not found for code ${code}`);
       return res.status(404).json({ error: 'المستخدم غير موجود' });
     }
 
-    const attendanceStats = await calculateAttendanceStats(code, startDate, endDate);
-
+    // حذف التقرير القديم إذا كان موجودًا
     const existingReport = await MonthlyBonusReport.findOne({
       code,
       dateFrom: startDate.toJSDate(),
       dateTo: endDate.toJSDate(),
     });
     if (existingReport) {
-      console.error(`Report already exists for code ${code} from ${dateFrom} to ${dateTo}`);
-      return res.status(400).json({ error: 'تقرير موجود مسبقًا لهذا الموظف في هذه الفترة' });
+      await MonthlyBonusReport.deleteOne({ _id: existingReport._id });
+      console.log(`Deleted existing report for code ${code} from ${dateFrom} to ${dateTo}`);
     }
+
+    const attendanceStats = await calculateAttendanceStats(code, startDate, endDate);
 
     const report = new MonthlyBonusReport({
       code,
@@ -307,19 +335,22 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
       totalWorkDays: attendanceStats.totalWorkDays,
       absences: attendanceStats.absences,
       annualLeave: attendanceStats.annualLeave,
+      medicalLeave: attendanceStats.medicalLeave,
       totalLeaveDays: attendanceStats.totalLeaveDays,
       tieUpValue: Number(tieUpValue) || 0,
       productionValue: Number(productionValue) || 0,
       advances: Number(advances) || user.advances || 0,
       deductions: Number(deductions) || 0,
-      netBonus: calculateNetBonus(
-        user.baseBonus || 0,
-        user.bonusPercentage || 0,
-        attendanceStats.absences,
-        Number(tieUpValue) || 0,
-        Number(productionValue) || 0,
-        Number(advances) || user.advances || 0,
-        Number(deductions) || 0
+      netBonus: Number(
+        calculateNetBonus(
+          user.baseBonus || 0,
+          user.bonusPercentage || 0,
+          attendanceStats.absences,
+          Number(tieUpValue) || 0,
+          Number(productionValue) || 0,
+          Number(advances) || user.advances || 0,
+          Number(deductions) || 0
+        )
       ),
       dateFrom: startDate.toJSDate(),
       dateTo: endDate.toJSDate(),
@@ -327,7 +358,7 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
     });
 
     await report.save();
-    console.log(`Created report for code ${code} from ${dateFrom} to ${dateTo}`);
+    console.log(`Created report for code ${code} from ${dateFrom} to ${dateTo}: netBonus=${report.netBonus}`);
     res.status(201).json({ message: 'تم حفظ التقرير بنجاح', report });
   } catch (error) {
     console.error('Error saving report:', error.message);
@@ -379,16 +410,11 @@ router.put('/:code', authMiddleware, adminMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'الاستقطاعات يجب ألا تكون سالبة' });
     }
 
-    const report = await MonthlyBonusReport.findOne({
+    let report = await MonthlyBonusReport.findOne({
       code,
       dateFrom: startDate.toJSDate(),
       dateTo: endDate.toJSDate(),
     });
-
-    if (!report) {
-      console.error(`Report not found for code ${code} from ${dateFrom} to ${dateTo}`);
-      return res.status(404).json({ error: 'التقرير غير موجود' });
-    }
 
     const user = await User.findOne({ code });
     if (!user) {
@@ -398,51 +424,116 @@ router.put('/:code', authMiddleware, adminMiddleware, async (req, res) => {
 
     const attendanceStats = await calculateAttendanceStats(code, startDate, endDate);
 
-    const updatedFields = {
-      tieUpValue: tieUpValue !== undefined ? Number(tieUpValue) : report.tieUpValue,
-      productionValue: productionValue !== undefined ? Number(productionValue) : report.productionValue,
-      advances: advances !== undefined ? Number(advances) : report.advances,
-      deductions: deductions !== undefined ? Number(deductions) : report.deductions,
-      totalWorkDays: attendanceStats.totalWorkDays,
-      absences: attendanceStats.absences,
-      annualLeave: attendanceStats.annualLeave,
-      totalLeaveDays: attendanceStats.totalLeaveDays,
-      updatedBy: req.user._id,
-      netBonus: calculateNetBonus(
-        report.baseBonus,
-        report.bonusPercentage,
-        attendanceStats.absences,
-        tieUpValue !== undefined ? Number(tieUpValue) : report.tieUpValue,
-        productionValue !== undefined ? Number(productionValue) : report.productionValue,
-        advances !== undefined ? Number(advances) : report.advances,
-        deductions !== undefined ? Number(deductions) : report.deductions
-      ),
-    };
+    if (report) {
+      // التحقق من زيادة قيمة التربيط والاستقطاعات
+      if (tieUpValue !== undefined && Number(tieUpValue) < Number(report.tieUpValue)) {
+        console.error(`tieUpValue (${tieUpValue}) is less than current (${report.tieUpValue})`);
+        return res.status(400).json({ error: 'قيمة التربيط يجب أن تكون أكبر من أو تساوي القيمة الحالية' });
+      }
+      if (deductions !== undefined && Number(deductions) < Number(report.deductions)) {
+        console.error(`deductions (${deductions}) is less than current (${report.deductions})`);
+        return res.status(400).json({ error: 'الاستقطاعات يجب أن تكون أكبر من أو تساوي القيمة الحالية' });
+      }
 
-    const updatedReport = await MonthlyBonusReport.findOneAndUpdate(
-      {
+      // تحديث التقرير
+      const updatedFields = {
+        tieUpValue: tieUpValue !== undefined ? Number(tieUpValue) : report.tieUpValue,
+        productionValue: productionValue !== undefined ? Number(productionValue) : report.productionValue,
+        advances: advances !== undefined ? Number(advances) : report.advances,
+        deductions: deductions !== undefined ? Number(deductions) : report.deductions,
+        totalWorkDays: attendanceStats.totalWorkDays,
+        absences: attendanceStats.absences,
+        annualLeave: attendanceStats.annualLeave,
+        medicalLeave: attendanceStats.medicalLeave,
+        totalLeaveDays: attendanceStats.totalLeaveDays,
+        updatedBy: req.user._id,
+        netBonus: Number(
+          calculateNetBonus(
+            report.baseBonus,
+            report.bonusPercentage,
+            attendanceStats.absences,
+            tieUpValue !== undefined ? Number(tieUpValue) : report.tieUpValue,
+            productionValue !== undefined ? Number(productionValue) : report.productionValue,
+            advances !== undefined ? Number(advances) : report.advances,
+            deductions !== undefined ? Number(deductions) : report.deductions
+          )
+        ),
+      };
+
+      const updatedReport = await MonthlyBonusReport.findOneAndUpdate(
+        {
+          code,
+          dateFrom: startDate.toJSDate(),
+          dateTo: endDate.toJSDate(),
+        },
+        { $set: updatedFields },
+        { new: true }
+      );
+
+      if (!updatedReport) {
+        console.error(`Failed to update report for code ${code} from ${dateFrom} to ${dateTo}`);
+        return res.status(404).json({ error: 'التقرير غير موجود' });
+      }
+
+      console.log(`Updated report for code ${code} from ${dateFrom} to ${dateTo}: netBonus=${updatedReport.netBonus}`);
+      return res.status(200).json({ message: 'تم تحديث التقرير بنجاح', report: updatedReport });
+    } else {
+      // إنشاء تقرير جديد إذا لم يكن موجودًا
+      console.log(`Report not found for code ${code} from ${dateFrom} to ${dateTo}, creating new report`);
+
+      const report = new MonthlyBonusReport({
         code,
+        employeeName: user.fullName || 'غير معروف',
+        department: user.department || '',
+        baseBonus: Number(user.baseBonus || 0),
+        bonusPercentage: Number(user.bonusPercentage || 0),
+        workDaysPerWeek: Number(user.workDaysPerWeek || 6),
+        totalWorkDays: attendanceStats.totalWorkDays,
+        absences: attendanceStats.absences,
+        annualLeave: attendanceStats.annualLeave,
+        medicalLeave: attendanceStats.medicalLeave,
+        totalLeaveDays: attendanceStats.totalLeaveDays,
+        tieUpValue: Number(tieUpValue) || 0,
+        productionValue: Number(productionValue) || 0,
+        advances: Number(advances) || user.advances || 0,
+        deductions: Number(deductions) || 0,
+        netBonus: Number(
+          calculateNetBonus(
+            user.baseBonus || 0,
+            user.bonusPercentage || 0,
+            attendanceStats.absences,
+            Number(tieUpValue) || 0,
+            Number(productionValue) || 0,
+            Number(advances) || user.advances || 0,
+            Number(deductions) || 0
+          )
+        ),
         dateFrom: startDate.toJSDate(),
         dateTo: endDate.toJSDate(),
-      },
-      { $set: updatedFields },
-      { new: true }
-    );
+        createdBy: req.user._id,
+      });
 
-    if (!updatedReport) {
-      console.error(`Failed to update report for code ${code} from ${dateFrom} to ${dateTo}`);
-      return res.status(404).json({ error: 'التقرير غير موجود' });
+      await report.save();
+      console.log(`Created report for code ${code} from ${dateFrom} to ${dateTo}: netBonus=${report.netBonus}`);
+      return res.status(201).json({ message: 'تم إنشاء التقرير بنجاح', report });
     }
-
-    console.log(`Updated report for code ${code} from ${dateFrom} to ${dateTo}: netBonus=${updatedReport.netBonus}`);
-    res.status(200).json({ message: 'تم تحديث التقرير بنجاح', report: updatedReport });
   } catch (error) {
-    console.error('Error updating report:', error.message);
+    console.error('Error updating/creating report:', error.message);
     if (error.code === 11000) {
       return res.status(400).json({ error: 'تقرير موجود مسبقًا لهذا الموظف في هذه الفترة' });
     }
-    res.status(500).json({ error: 'خطأ في تحديث التقرير', details: error.message });
+    return res.status(500).json({ error: 'خطأ في تحديث أو إنشاء التقرير', details: error.message });
   }
 });
 
-export default router;
+// دالة موحدة لحساب صافي المكافأة (مأخوذة من MonthlyBonusReport.js)
+const calculateNetBonus = (baseBonus, bonusPercentage, absences, tieUpValue, productionValue, advances, deductions) => {
+  const bonus = Number(baseBonus || 0) * (Number(bonusPercentage || 0) / 100);
+  const dailyBonus = bonus / 30;
+  const absenceDeduction = Number(absences || 0) * dailyBonus;
+  const adjustedBonus = bonus - absenceDeduction;
+  const netBonus = adjustedBonus + Number(tieUpValue || 0) + Number(productionValue || 0) - Number(advances || 0) - Number(deductions || 0);
+  return Math.max(0, Number(netBonus.toFixed(2)));
+};
+
+export { router as default, authMiddleware, adminMiddleware };

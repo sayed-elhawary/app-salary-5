@@ -1,13 +1,12 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const employeeSchema = new mongoose.Schema({
   code: { type: String, required: true, unique: true },
   name: { type: String, required: true },
-  department: { type: String, required: true },
-  basicSalary: { type: Number, required: true },
-  medicalInsurance: { type: Number, required: true },
-  socialInsurance: { type: Number, required: true },
-  annualLeaveBalance: { type: Number, default: 20 },
+  department: String,
+  baseBonus: Number,
+  bonusPercentage: Number,
+  workDaysPerWeek: { type: Number, default: 6 },
 });
 
-module.exports = mongoose.model('Employee', employeeSchema);
+export default mongoose.model('Employee', employeeSchema);
