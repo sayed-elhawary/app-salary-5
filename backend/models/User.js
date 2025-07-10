@@ -96,11 +96,6 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: () => DateTime.now().setZone('Africa/Cairo').startOf('year').toJSDate(),
     },
-    monthlyLateAllowance: {
-      type: Number,
-      default: 120,
-      min: [0, 'رصيد السماح الشهري يجب ألا يكون سالبًا'],
-    },
     penaltiesValue: {
       type: Number,
       default: 0,

@@ -1,4 +1,3 @@
-// backend/models/Fingerprint.js
 import mongoose from 'mongoose';
 import { DateTime } from 'luxon';
 import User from './User.js';
@@ -107,11 +106,6 @@ const fingerprintSchema = new mongoose.Schema(
       enum: [5, 6],
       default: 6,
     },
-    monthlyLateAllowance: {
-      type: Number,
-      default: 120,
-      min: [0, 'بدل التأخير الشهري يجب ألا يكون سالبًا'],
-    },
     customAnnualLeave: {
       type: Number,
       default: 0,
@@ -184,12 +178,34 @@ fingerprintSchema.pre('save', async function (next) {
 
     this.employeeName = user.fullName || 'غير معروف';
     this.workDaysPerWeek = user.workDaysPerWeek || 6;
-    this.monthlyLateAllowance = user.monthlyLateAllowance || 120;
     this.customAnnualLeave = user.customAnnualLeave || 0;
     this.annualLeaveBalance = user.annualLeaveBalance || 21;
     this.advances = user.advances || 0;
 
-    if (
+    // السماح بتعديل بدل الإجازة حتى لو كانت هناك حالة إجازة أخرى
+    if (this.isModified('leaveCompensation') && this.leaveCompensation > 0) {
+      if (this._previousAnnualLeave === true || this.annualLeave) {
+        user.annualLeaveBalance = (user.annualLeaveBalance || 21) + 1;
+        await user.save();
+        console.log(
+          `Restored 1 day to annualLeaveBalance for ${this.code} due to change to leaveCompensation. New balance: ${user.annualLeaveBalance}`
+        );
+      }
+      this.absence = false;
+      this.annualLeave = false;
+      this.medicalLeave = false;
+      this.officialLeave = false;
+      this.appropriateValue = 0;
+      this.appropriateValueDays = 0;
+      this.workHours = 0;
+      this.overtime = 0;
+      this.lateMinutes = 0;
+      this.lateDeduction = 0;
+      this.earlyLeaveDeduction = 0;
+      this.medicalLeaveDeduction = 0;
+      this.isSingleFingerprint = false;
+      this.annualLeaveBalance = user.annualLeaveBalance;
+    } else if (
       [
         this.absence,
         this.annualLeave,
@@ -218,7 +234,6 @@ fingerprintSchema.pre('save', async function (next) {
     logChanges('leaveCompensation', this.leaveCompensation);
     logChanges('appropriateValue', this.appropriateValue);
     logChanges('earlyLeaveDeduction', this.earlyLeaveDeduction);
-    logChanges('monthlyLateAllowance', this.monthlyLateAllowance);
 
     next();
   } catch (err) {
@@ -292,14 +307,39 @@ fingerprintSchema.methods.calculateAttendance = async function () {
 
     this.employeeName = user.fullName || 'غير معروف';
     this.workDaysPerWeek = user.workDaysPerWeek || 6;
-    this.monthlyLateAllowance = user.monthlyLateAllowance || 120;
     this.customAnnualLeave = user.customAnnualLeave || 0;
     this.annualLeaveBalance = user.annualLeaveBalance || 21;
     this.advances = user.advances || 0;
 
     // التحقق من حالات الإجازة أولاً
     if (this.annualLeave || this.medicalLeave || this.officialLeave || this.leaveCompensation > 0 || this.appropriateValue > 0) {
-      if (this.annualLeave) {
+      if (this.leaveCompensation > 0 || (this.isModified('leaveCompensation') && this.leaveCompensation)) {
+        this.leaveCompensation = (user.baseSalary / 30) * 2;
+        this.workHours = 0;
+        this.overtime = 0;
+        this.lateMinutes = 0;
+        this.lateDeduction = 0;
+        this.earlyLeaveDeduction = 0;
+        this.medicalLeaveDeduction = 0;
+        this.absence = false;
+        this.annualLeave = false;
+        this.medicalLeave = false;
+        this.officialLeave = false;
+        this.appropriateValue = 0;
+        this.appropriateValueDays = 0;
+        this.isSingleFingerprint = false;
+        if (this._previousAnnualLeave === true || this.annualLeave) {
+          user.annualLeaveBalance = (user.annualLeaveBalance || 21) + 1;
+          await user.save();
+          console.log(
+            `Restored 1 day to annualLeaveBalance for ${this.code} due to change to leaveCompensation. New balance: ${user.annualLeaveBalance}`
+          );
+        }
+        this.annualLeaveBalance = user.annualLeaveBalance;
+        console.log(
+          `Leave compensation applied for ${this.code}: leaveCompensation=${this.leaveCompensation}, annualLeaveBalance=${this.annualLeaveBalance}`
+        );
+      } else if (this.annualLeave) {
         if (user.annualLeaveBalance <= 0) {
           throw new Error(`رصيد الإجازة السنوية غير كافٍ لـ ${this.code}`);
         }
@@ -333,32 +373,6 @@ fingerprintSchema.methods.calculateAttendance = async function () {
         this.annualLeaveBalance = user.annualLeaveBalance;
         console.log(
           `Annual leave applied for ${this.code}: workHours=${this.workHours}, checkIn=${this.checkIn}, checkOut=${this.checkOut}, annualLeaveBalance=${this.annualLeaveBalance}`
-        );
-      } else if (this.leaveCompensation > 0 || (this.isModified('leaveCompensation') && this.leaveCompensation)) {
-        this.leaveCompensation = (user.baseSalary / 30) * 2;
-        this.workHours = 0;
-        this.overtime = 0;
-        this.lateMinutes = 0;
-        this.lateDeduction = 0;
-        this.earlyLeaveDeduction = 0;
-        this.medicalLeaveDeduction = 0;
-        this.absence = false;
-        this.annualLeave = false;
-        this.medicalLeave = false;
-        this.officialLeave = false;
-        this.appropriateValue = 0;
-        this.appropriateValueDays = 0;
-        this.isSingleFingerprint = false;
-        if (this._previousAnnualLeave === true) {
-          user.annualLeaveBalance = (user.annualLeaveBalance || 21) + 1;
-          await user.save();
-          console.log(
-            `Restored 1 day to annualLeaveBalance for ${this.code} due to change to leaveCompensation. New balance: ${user.annualLeaveBalance}`
-          );
-        }
-        this.annualLeaveBalance = user.annualLeaveBalance;
-        console.log(
-          `Leave compensation applied for ${this.code}: leaveCompensation=${this.leaveCompensation}, annualLeaveBalance=${this.annualLeaveBalance}`
         );
       } else if (this.appropriateValue > 0) {
         this.workHours = 0;
@@ -466,7 +480,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
       this.leaveCompensation = 0;
       this.appropriateValueDays = 0;
       this.isSingleFingerprint = false;
-      console.log(`Weekly leave day for ${this.code}: no deductions, monthlyLateAllowance=${this.monthlyLateAllowance}, annualLeaveBalance=${this.annualLeaveBalance}`);
+      console.log(`Weekly leave day for ${this.code}: no deductions, annualLeaveBalance=${this.annualLeaveBalance}`);
       await this.save();
       return;
     }
@@ -487,7 +501,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
       this.appropriateValueDays = 0;
       this.isSingleFingerprint = true;
       console.log(
-        `Single fingerprint recorded for ${this.code}: workHours=${this.workHours}, checkIn=${this.checkIn}, checkOut=${this.checkOut}, monthlyLateAllowance=${this.monthlyLateAllowance}, annualLeaveBalance=${this.annualLeaveBalance}`
+        `Single fingerprint recorded for ${this.code}: workHours=${this.workHours}, checkIn=${this.checkIn}, checkOut=${this.checkOut}, annualLeaveBalance=${this.annualLeaveBalance}`
       );
       await this.save();
       return;
@@ -516,7 +530,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
         );
         this.annualLeaveBalance = user.annualLeaveBalance;
       }
-      console.log(`Absence recorded for ${this.code}: earlyLeaveDeduction=1, monthlyLateAllowance=${this.monthlyLateAllowance}, annualLeaveBalance=${this.annualLeaveBalance}`);
+      console.log(`Absence recorded for ${this.code}: earlyLeaveDeduction=1, annualLeaveBalance=${this.annualLeaveBalance}`);
       await this.save();
       return;
     }
@@ -539,7 +553,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
         this.leaveCompensation = 0;
         this.appropriateValueDays = 0;
         this.isSingleFingerprint = false;
-        console.warn(`Invalid checkIn or checkOut time for ${this.code}: monthlyLateAllowance=${this.monthlyLateAllowance}, annualLeaveBalance=${this.annualLeaveBalance}`);
+        console.warn(`Invalid checkIn or checkOut time for ${this.code}: annualLeaveBalance=${this.annualLeaveBalance}`);
         await this.save();
         return;
       }
@@ -554,7 +568,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
       });
       const gracePeriodEnd = DateTime.fromJSDate(this.date, { zone: 'Africa/Cairo' }).set({
         hour: 9,
-        minute: 16,
+        minute: 15,
       });
       const lateThreshold1 = DateTime.fromJSDate(this.date, { zone: 'Africa/Cairo' }).set({
         hour: 11,
@@ -573,27 +587,14 @@ fingerprintSchema.methods.calculateAttendance = async function () {
       if (checkIn > gracePeriodEnd) {
         const lateMs = checkIn.toMillis() - officialCheckIn.toMillis();
         this.lateMinutes = Math.max(lateMs / (1000 * 60), 0).toFixed(0);
-        if (this.monthlyLateAllowance >= 46) {
-          this.monthlyLateAllowance -= 46;
-          this.lateDeduction = 0;
-          user.monthlyLateAllowance = this.monthlyLateAllowance;
-          await user.save();
-          console.log(
-            `Deducted 46 minutes from monthlyLateAllowance for ${this.code}. New allowance: ${this.monthlyLateAllowance}, lateMinutes=${this.lateMinutes}, lateDeduction=${this.lateDeduction}`
-          );
+        if (checkIn <= lateThreshold1) {
+          this.lateDeduction = 0.25; // من 9:16 إلى 11:00
         } else {
-          if (checkIn <= lateThreshold1) {
-            this.lateDeduction = 0.25; // من 9:16 إلى 11:00
-          } else {
-            this.lateDeduction = 0.5; // بعد 11:00
-          }
-          user.monthlyLateAllowance = 0;
-          this.monthlyLateAllowance = 0;
-          await user.save();
-          console.log(
-            `Insufficient monthlyLateAllowance for ${this.code}. Applied lateDeduction=${this.lateDeduction}, monthlyLateAllowance set to 0`
-          );
+          this.lateDeduction = 0.5; // بعد 11:00
         }
+        console.log(
+          `Late deduction applied for ${this.code}: lateDeduction=${this.lateDeduction}, lateMinutes=${this.lateMinutes}`
+        );
       } else {
         this.lateMinutes = 0;
         this.lateDeduction = 0;
@@ -658,7 +659,7 @@ fingerprintSchema.methods.calculateAttendance = async function () {
       console.log(
         `Attendance calculated for ${this.code}: workHours=${this.workHours}, overtime=${this.overtime}, ` +
           `lateMinutes=${this.lateMinutes}, lateDeduction=${this.lateDeduction}, earlyLeaveDeduction=${this.earlyLeaveDeduction}, ` +
-          `monthlyLateAllowance=${this.monthlyLateAllowance}, annualLeaveBalance=${this.annualLeaveBalance}`
+          `annualLeaveBalance=${this.annualLeaveBalance}`
       );
       await this.save();
     }
@@ -698,7 +699,6 @@ fingerprintSchema.statics.createMissingReport = async function (code, date) {
     isSingleFingerprint: false,
     workDaysPerWeek,
     employeeName: user.fullName || 'غير معروف',
-    monthlyLateAllowance: user.monthlyLateAllowance || 120,
     customAnnualLeave: user.customAnnualLeave || 0,
     annualLeaveBalance: user.annualLeaveBalance || 21,
     advances: user.advances || 0,
@@ -708,21 +708,6 @@ fingerprintSchema.statics.createMissingReport = async function (code, date) {
   await fingerprint.save();
   return fingerprint;
 };
-
-// إعادة تعيين بدل التأخير الشهري في بداية كل شهر
-fingerprintSchema.statics.resetMonthlyLateAllowance = async function () {
-  try {
-    await User.updateMany({}, { $set: { monthlyLateAllowance: 120 } });
-    console.log('Reset monthlyLateAllowance to 120 for all users');
-  } catch (error) {
-    console.error('Error resetting monthlyLateAllowance:', error.message);
-  }
-};
-
-// جدولة إعادة تعيين بدل التأخير الشهري
-cron.schedule('0 0 1 * *', async () => {
-  await Fingerprint.resetMonthlyLateAllowance();
-});
 
 const Fingerprint = mongoose.models.Fingerprint || mongoose.model('Fingerprint', fingerprintSchema);
 
