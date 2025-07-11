@@ -106,9 +106,36 @@ const calculateWorkDaysInRange = (startDate, endDate, workDaysPerWeek) => {
   return workDays;
 };
 
-// معالجة خصومات التأخير
+async function checkAndResetMonthlyAllowance(report) {
+  const { DateTime } = require('luxon');
+  const User = require('./models/User'); // تأكد من استيراد نموذج User
+
+  const currentMonth = DateTime.fromJSDate(report.date).startOf('month').toJSDate();
+  const user = await User.findOne({ code: report.code });
+  if (!user) {
+    console.warn(`User not found for code ${report.code}`);
+    return;
+  }
+
+  const lastReset = user.lastAllowanceReset || new Date(0);
+  if (DateTime.fromJSDate(lastReset).startOf('month').toMillis() !== DateTime.fromJSDate(currentMonth).toMillis()) {
+    await User.updateOne(
+      { code: report.code },
+      { $set: { monthlyLateAllowance: 120, lastAllowanceReset: currentMonth } }
+    );
+    console.log(`Monthly late allowance reset for ${report.code} to 120 minutes for month starting ${currentMonth}`);
+  }
+}
+
 async function handleLateDeduction(report) {
+  const { DateTime } = require('luxon');
+  const User = require('./models/User');
+  const Fingerprint = require('./models/Fingerprint');
+
   try {
+    // التحقق من إعادة تعيين رصيد السماح
+    await checkAndResetMonthlyAllowance(report);
+
     const user = await User.findOne({ code: report.code });
     if (!user) {
       console.warn(`User not found for code ${report.code}`);
@@ -150,7 +177,7 @@ async function handleLateDeduction(report) {
       const monthlyLateAllowance = user.monthlyLateAllowance || 120;
       let remainingAllowance = monthlyLateAllowance;
 
-      // جلب كل سجلات التأخير السابقة في نفس الشهر لتحديث رصيد السماح
+      // جلب كل سجلات التأخير السابقة في نفس الشهر
       const startOfMonth = DateTime.fromJSDate(report.date).startOf('month').toJSDate();
       const endOfDay = DateTime.fromJSDate(report.date).endOf('day').toJSDate();
       const previousReports = await Fingerprint.find({
@@ -159,7 +186,7 @@ async function handleLateDeduction(report) {
         lateMinutes: { $gt: 0 },
       });
 
-      // حساب إجمالي دقائق التأخير المستخدمة في الشهر
+      // حساب إجمالي دقائق التأخير المستخدمة
       const usedAllowance = previousReports
         .filter(r => r._id.toString() !== report._id.toString())
         .reduce((sum, r) => sum + r.lateMinutes, 0);
@@ -170,7 +197,7 @@ async function handleLateDeduction(report) {
 
         // إذا كان هناك رصيد سماح كافٍ
         if (remainingAllowance >= diffMinutes) {
-          report.lateDeduction = 0; // لا خصم إذا كان التأخير مغطى برصيد السماح
+          report.lateDeduction = 0;
           console.log(`Late minutes covered by allowance for ${report.code} on ${DateTime.fromJSDate(report.date).toISODate()}: ${diffMinutes} minutes, remaining allowance: ${remainingAllowance - diffMinutes}`);
         } else {
           // تطبيق الخصم إذا تجاوز التأخير رصيد السماح
@@ -186,8 +213,12 @@ async function handleLateDeduction(report) {
         report.lateDeduction = 0;
       }
 
-      // تحديث رصيد السماح في السجل
+      // تحديث رصيد السماح في سجل المستخدم
       report.monthlyLateAllowance = Math.max(0, remainingAllowance - diffMinutes);
+      await User.updateOne(
+        { code: report.code },
+        { $set: { monthlyLateAllowance: report.monthlyLateAllowance } }
+      );
     } else {
       report.lateMinutes = 0;
       report.lateDeduction = 0;

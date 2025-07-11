@@ -69,7 +69,7 @@ const LoadingSpinner = () => (
 );
 
 const UserSettings = () => {
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext); // إضافة logout من AuthContext
   const navigate = useNavigate();
   const [searchCode, setSearchCode] = useState('');
   const [users, setUsers] = useState([]);
@@ -78,12 +78,33 @@ const UserSettings = () => {
   const [editForm, setEditForm] = useState({});
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [bulkUpdateForm, setBulkUpdateForm] = useState({
+    monthlyLateAllowanceChange: '0',
+    baseSalaryPercentage: '0',
+    baseBonusIncrement: '0',
+    medicalInsurance: '',
+    socialInsurance: '',
+    excludedUsers: [],
+  });
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/login');
+    } else {
+      handleShowAll();
     }
   }, [user, navigate]);
+
+  const handleTokenError = (err) => {
+    if (err.response?.status === 401) {
+      console.error('Token expired or invalid, logging out');
+      logout(); // تسجيل الخروج
+      navigate('/login');
+      return true;
+    }
+    return false;
+  };
 
   const handleSearch = async () => {
     if (!searchCode) {
@@ -100,6 +121,7 @@ const UserSettings = () => {
       });
       setUsers(res.data.users || [res.data]);
     } catch (err) {
+      if (handleTokenError(err)) return;
       console.error('Error fetching user:', err.response?.data?.message || err.message);
       setError(`خطأ أثناء البحث: ${err.response?.data?.message || err.message}`);
       setUsers([]);
@@ -118,6 +140,7 @@ const UserSettings = () => {
       setUsers(res.data.users || res.data);
       setSearchCode('');
     } catch (err) {
+      if (handleTokenError(err)) return;
       console.error('Error fetching all users:', err.response?.data?.message || err.message);
       setError(`خطأ أثناء جلب جميع المستخدمين: ${err.response?.data?.message || err.message}`);
       setUsers([]);
@@ -127,17 +150,26 @@ const UserSettings = () => {
   };
 
   const handleEditClick = (userData) => {
+    console.log('handleEditClick - userData:', userData);
+    if (!userData || !userData.code) {
+      console.error('Invalid userData:', userData);
+      setError('خطأ: بيانات المستخدم غير صالحة');
+      return;
+    }
     setEditingUser(userData);
     setEditForm({
-      code: userData.code,
-      employeeName: userData.employeeName,
-      department: userData.department,
-      baseSalary: userData.baseSalary || '0.00',
-      medicalInsurance: userData.medicalInsurance || '0.00',
-      socialInsurance: userData.socialInsurance || '0.00',
-      annualLeaveBalance: userData.annualLeaveBalance || '21',
-      eidBonus: userData.eidBonus || '0.00',
-      advances: userData.advances || '0.00',
+      code: userData.code || '',
+      employeeName: userData.employeeName || userData.fullName || '',
+      department: userData.department || '',
+      baseSalary: userData.baseSalary ? parseFloat(userData.baseSalary).toFixed(2) : '0.00',
+      medicalInsurance: userData.medicalInsurance ? parseFloat(userData.medicalInsurance).toFixed(2) : '0.00',
+      socialInsurance: userData.socialInsurance ? parseFloat(userData.socialInsurance).toFixed(2) : '0.00',
+      annualLeaveBalance: userData.annualLeaveBalance ? parseInt(userData.annualLeaveBalance, 10).toString() : '21',
+      eidBonus: userData.eidBonus ? parseFloat(userData.eidBonus).toFixed(2) : '0.00',
+      advances: userData.advances ? parseFloat(userData.advances).toFixed(2) : '0.00',
+      monthlyLateAllowance: userData.monthlyLateAllowance ? parseInt(userData.monthlyLateAllowance, 10).toString() : '120',
+      mealAllowance: userData.mealAllowance ? parseFloat(userData.mealAllowance).toFixed(2) : '500.00',
+      password: '', // دائمًا فارغ لمنع إرسال كلمة مرور مُجزأة
     });
     setError('');
   };
@@ -152,6 +184,7 @@ const UserSettings = () => {
     setLoading(true);
     setError('');
     try {
+      // التحقق من الحقول الرقمية
       if (parseFloat(editForm.baseSalary) < 0) {
         setError('الراتب الأساسي لا يمكن أن يكون سالبًا');
         setLoading(false);
@@ -182,38 +215,76 @@ const UserSettings = () => {
         setLoading(false);
         return;
       }
+      if (parseFloat(editForm.monthlyLateAllowance) < 0) {
+        setError('رصيد السماح الشهري لا يمكن أن يكون سالبًا');
+        setLoading(false);
+        return;
+      }
+      if (parseFloat(editForm.mealAllowance) < 0) {
+        setError('بدل الوجبة لا يمكن أن يكون سالبًا');
+        setLoading(false);
+        return;
+      }
+      if (editForm.password && editForm.password.length < 6) {
+        setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+        setLoading(false);
+        return;
+      }
+      if (editForm.password && (editForm.password.startsWith('$2a$') || editForm.password.startsWith('$2b$'))) {
+        setError('كلمة المرور يجب أن تكون نصًا عاديًا، وليس تجزئة');
+        setLoading(false);
+        return;
+      }
 
-      await axios.put(
+      const updateData = {
+        code: editForm.code,
+        employeeName: editForm.employeeName,
+        department: editForm.department,
+        baseSalary: parseFloat(editForm.baseSalary),
+        medicalInsurance: parseFloat(editForm.medicalInsurance),
+        socialInsurance: parseFloat(editForm.socialInsurance),
+        annualLeaveBalance: parseInt(editForm.annualLeaveBalance, 10),
+        eidBonus: parseFloat(editForm.eidBonus),
+        advances: parseFloat(editForm.advances),
+        monthlyLateAllowance: parseInt(editForm.monthlyLateAllowance, 10),
+        mealAllowance: parseFloat(editForm.mealAllowance),
+        createdBy: user._id,
+      };
+
+      if (editForm.password) {
+        console.log('Sending password for update:', editForm.password);
+        updateData.password = editForm.password;
+      } else {
+        console.log('No password provided for update');
+      }
+
+      console.log('Sending update data:', updateData);
+
+      const response = await axios.put(
         `${process.env.REACT_APP_API_URL}/api/users/${editForm.code}`,
-        {
-          code: editForm.code,
-          employeeName: editForm.employeeName,
-          department: editForm.department,
-          baseSalary: parseFloat(editForm.baseSalary),
-          medicalInsurance: parseFloat(editForm.medicalInsurance),
-          socialInsurance: parseFloat(editForm.socialInsurance),
-          annualLeaveBalance: parseFloat(editForm.annualLeaveBalance),
-          eidBonus: parseFloat(editForm.eidBonus),
-          advances: parseFloat(editForm.advances),
-          createdBy: user._id,
-        },
+        updateData,
         {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         }
       );
+
+      console.log('Update response:', response.data);
 
       setUsers((prev) =>
         prev.map((u) =>
           u.code === editForm.code
             ? {
                 ...u,
-                ...editForm,
+                fullName: editForm.employeeName,
+                department: editForm.department,
                 baseSalary: parseFloat(editForm.baseSalary).toFixed(2),
                 medicalInsurance: parseFloat(editForm.medicalInsurance).toFixed(2),
                 socialInsurance: parseFloat(editForm.socialInsurance).toFixed(2),
-                annualLeaveBalance: parseFloat(editForm.annualLeaveBalance).toFixed(0),
+                annualLeaveBalance: parseInt(editForm.annualLeaveBalance, 10).toString(),
                 eidBonus: parseFloat(editForm.eidBonus).toFixed(2),
                 advances: parseFloat(editForm.advances).toFixed(2),
+                monthlyLateAllowance: parseInt(editForm.monthlyLateAllowance, 10).toString(),
+                mealAllowance: parseFloat(editForm.mealAllowance).toFixed(2),
               }
             : u
         )
@@ -221,10 +292,22 @@ const UserSettings = () => {
 
       setEditingUser(null);
       setShowSuccess(true);
+      if (editForm.password && response.data.message.includes('تم تحديث كلمة المرور')) {
+        alert('تم تحديث كلمة المرور بنجاح. يرجى استخدام كلمة المرور الجديدة لتسجيل الدخول.');
+      }
       setTimeout(() => setShowSuccess(false), 2000);
     } catch (err) {
-      console.error('Error updating user:', err.response?.data?.message || err.message);
-      setError(`خطأ أثناء التعديل: ${err.response?.data?.message || err.message}`);
+      if (handleTokenError(err)) return;
+      console.error('Error updating user:', err.response?.data?.message || err.message, err.stack);
+      setError(
+        err.response?.data?.message === 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'
+          ? 'كلمة المرور المدخلة قصيرة جدًا. يرجى إدخال 6 أحرف على الأقل.'
+          : err.response?.data?.message === 'كلمة المرور يجب أن تكون نصًا عاديًا، وليس تجزئة'
+          ? 'كلمة المرور يجب أن تكون نصًا عاديًا، وليس تجزئة.'
+          : err.response?.data?.message === 'خطأ أثناء تشفير كلمة المرور'
+          ? 'فشل تحديث كلمة المرور بسبب مشكلة في التشفير. حاول مرة أخرى.'
+          : `خطأ أثناء التعديل: ${err.response?.data?.message || err.message}`
+      );
     } finally {
       setLoading(false);
     }
@@ -234,6 +317,124 @@ const UserSettings = () => {
     setEditingUser(null);
     setEditForm({});
     setError('');
+  };
+
+  const handleDeleteClick = (userData) => {
+    setShowDeleteConfirm(userData);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/api/users/${showDeleteConfirm.code}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      setUsers((prev) => prev.filter((u) => u.code !== showDeleteConfirm.code));
+      setShowDeleteConfirm(null);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+    } catch (err) {
+      if (handleTokenError(err)) return;
+      console.error('Error deleting user:', err.response?.data?.message || err.message);
+      setError(`خطأ أثناء الحذف: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(null);
+    setError('');
+  };
+
+  const handleBulkUpdateChange = (e) => {
+    const { name, value } = e.target;
+    setBulkUpdateForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleExcludedUsersChange = (e) => {
+    const selectedOptions = Array.from(e.target.selectedOptions).map((option) => option.value);
+    setBulkUpdateForm((prev) => ({ ...prev, excludedUsers: selectedOptions }));
+  };
+
+  const handleBulkUpdateSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const { monthlyLateAllowanceChange, baseSalaryPercentage, baseBonusIncrement, medicalInsurance, socialInsurance, excludedUsers } = bulkUpdateForm;
+
+      if (!monthlyLateAllowanceChange && !baseSalaryPercentage && !baseBonusIncrement && !medicalInsurance && !socialInsurance) {
+        setError('يرجى إدخال قيمة واحدة على الأقل للتعديل');
+        setLoading(false);
+        return;
+      }
+
+      if (monthlyLateAllowanceChange && isNaN(parseFloat(monthlyLateAllowanceChange))) {
+        setError('رصيد السماح الشهري يجب أن يكون رقمًا');
+        setLoading(false);
+        return;
+      }
+
+      if (baseSalaryPercentage && (isNaN(parseFloat(baseSalaryPercentage)) || parseFloat(baseSalaryPercentage) < 0)) {
+        setError('نسبة الراتب الأساسي يجب أن تكون رقمًا موجبًا');
+        setLoading(false);
+        return;
+      }
+
+      if (baseBonusIncrement && (isNaN(parseFloat(baseBonusIncrement)) || parseFloat(baseBonusIncrement) < 0)) {
+        setError('زيادة الحافز الأساسي يجب أن تكون رقمًا موجبًا');
+        setLoading(false);
+        return;
+      }
+
+      if (medicalInsurance && (isNaN(parseFloat(medicalInsurance)) || parseFloat(medicalInsurance) < 0)) {
+        setError('التأمين الطبي يجب أن يكون رقمًا موجبًا');
+        setLoading(false);
+        return;
+      }
+
+      if (socialInsurance && (isNaN(parseFloat(socialInsurance)) || parseFloat(socialInsurance) < 0)) {
+        setError('التأمين الاجتماعي يجب أن يكون رقمًا موجبًا');
+        setLoading(false);
+        return;
+      }
+
+      const res = await axios.post(
+        `${process.env.REACT_APP_API_URL}/api/users/bulk-update`,
+        {
+          monthlyLateAllowanceChange: parseFloat(monthlyLateAllowanceChange) || 0,
+          baseSalaryPercentage: parseFloat(baseSalaryPercentage) || 0,
+          baseBonusIncrement: parseFloat(baseBonusIncrement) || 0,
+          medicalInsurance: medicalInsurance ? parseFloat(medicalInsurance) : undefined,
+          socialInsurance: socialInsurance ? parseFloat(socialInsurance) : undefined,
+          excludedUsers,
+          createdBy: user._id,
+        },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        }
+      );
+
+      setUsers(res.data.users);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+      setBulkUpdateForm({
+        monthlyLateAllowanceChange: '0',
+        baseSalaryPercentage: '0',
+        baseBonusIncrement: '0',
+        medicalInsurance: '',
+        socialInsurance: '',
+        excludedUsers: [],
+      });
+    } catch (err) {
+      if (handleTokenError(err)) return;
+      console.error('Error in bulk update:', err.response?.data?.message || err.message);
+      setError(`خطأ أثناء التعديل الجماعي: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!user || user.role !== 'admin') return null;
@@ -300,6 +501,125 @@ const UserSettings = () => {
                 }`}
               >
                 {loading ? 'جارٍ الجلب...' : 'عرض الكل'}
+              </motion.button>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6"
+        >
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-right flex items-center gap-3">
+            <SettingsIcon className="h-6 w-6 text-teal-500" />
+            تعديل جماعي للمستخدمين
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                تغيير رصيد السماح الشهري (دقائق، يمكن أن يكون سالبًا)
+              </label>
+              <input
+                type="number"
+                name="monthlyLateAllowanceChange"
+                value={bulkUpdateForm.monthlyLateAllowanceChange}
+                onChange={handleBulkUpdateChange}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                نسبة زيادة الراتب الأساسي (%)
+              </label>
+              <input
+                type="number"
+                name="baseSalaryPercentage"
+                value={bulkUpdateForm.baseSalaryPercentage}
+                onChange={handleBulkUpdateChange}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                زيادة الحافز الأساسي
+              </label>
+              <input
+                type="number"
+                name="baseBonusIncrement"
+                value={bulkUpdateForm.baseBonusIncrement}
+                onChange={handleBulkUpdateChange}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                التأمين الطبي (قيمة جديدة)
+              </label>
+              <input
+                type="number"
+                name="medicalInsurance"
+                value={bulkUpdateForm.medicalInsurance}
+                onChange={handleBulkUpdateChange}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                التأمين الاجتماعي (قيمة جديدة)
+              </label>
+              <input
+                type="number"
+                name="socialInsurance"
+                value={bulkUpdateForm.socialInsurance}
+                onChange={handleBulkUpdateChange}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                استثناء مستخدمين (اختيار متعدد)
+              </label>
+              <select
+                multiple
+                name="excludedUsers"
+                value={bulkUpdateForm.excludedUsers}
+                onChange={handleExcludedUsersChange}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                disabled={loading}
+              >
+                {users.map((userData) => (
+                  <option key={userData.code} value={userData.code}>
+                    {userData.fullName} ({userData.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2 flex justify-end gap-3">
+              <motion.button
+                onClick={handleBulkUpdateSubmit}
+                disabled={loading}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full sm:w-auto bg-teal-500 text-white px-5 py-2.5 rounded-md hover:bg-teal-600 transition-all duration-200 text-sm font-medium shadow-sm ${
+                  loading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {loading ? 'جارٍ التعديل...' : 'تطبيق التعديلات الجماعية'}
               </motion.button>
             </div>
           </div>
@@ -463,6 +783,49 @@ const UserSettings = () => {
                       disabled={loading}
                     />
                   </div>
+                  <div>
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                      رصيد السماح الشهري (دقائق)
+                    </label>
+                    <input
+                      type="number"
+                      name="monthlyLateAllowance"
+                      value={editForm.monthlyLateAllowance}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                      min="0"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                      بدل الوجبة
+                    </label>
+                    <input
+                      type="number"
+                      name="mealAllowance"
+                      value={editForm.mealAllowance}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                      min="0"
+                      step="0.01"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 text-sm font-medium mb-2 text-right">
+                      كلمة المرور (اتركها فارغة لعدم التغيير)
+                    </label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={editForm.password}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-md text-right text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 hover:bg-gray-100"
+                      placeholder="أدخل كلمة المرور الجديدة"
+                      disabled={loading}
+                    />
+                  </div>
                   <div className="md:col-span-2 flex justify-end gap-3">
                     <motion.button
                       onClick={handleEditSubmit}
@@ -495,6 +858,53 @@ const UserSettings = () => {
         </AnimatePresence>
 
         <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
+            >
+              <motion.div
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 w-full max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className="text-lg font-bold text-gray-900 mb-4 text-right">
+                  تأكيد حذف المستخدم
+                </h2>
+                <p className="text-gray-600 text-sm mb-6 text-right">
+                  هل أنت متأكد من حذف المستخدم {showDeleteConfirm.fullName} (كود: {showDeleteConfirm.code})؟
+                </p>
+                <div className="flex justify-end gap-3">
+                  <motion.button
+                    onClick={handleDeleteConfirm}
+                    disabled={loading}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`bg-red-500 text-white px-5 py-2.5 rounded-md hover:bg-red-600 transition-all duration-200 text-sm font-medium shadow-sm ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {loading ? 'جارٍ الحذف...' : 'حذف'}
+                  </motion.button>
+                  <motion.button
+                    onClick={handleDeleteCancel}
+                    disabled={loading}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`bg-gray-500 text-white px-5 py-2.5 rounded-md hover:bg-gray-600 transition-all duration-200 text-sm font-medium shadow-sm ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    إلغاء
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
           {showSuccess && <SuccessCheckmark onComplete={() => setShowSuccess(false)} />}
         </AnimatePresence>
 
@@ -518,11 +928,14 @@ const UserSettings = () => {
                       'الاسم',
                       'القسم',
                       'الراتب الأساسي',
+                      'الحافز الأساسي',
                       'التأمين الطبي',
                       'التأمين الاجتماعي',
                       'رصيد الإجازة السنوية',
                       'العيدية',
                       'السلف',
+                      'رصيد السماح الشهري',
+                      'بدل الوجبة',
                       'إجراءات',
                     ].map((header) => (
                       <th
@@ -543,15 +956,18 @@ const UserSettings = () => {
                       } hover:bg-teal-50 transition-all duration-200 border-b border-gray-100`}
                     >
                       <td className="p-3 text-gray-700 whitespace-nowrap">{userData.code}</td>
-                      <td className="p-3 text-gray-700">{userData.employeeName}</td>
+                      <td className="p-3 text-gray-700">{userData.fullName}</td>
                       <td className="p-3 text-gray-700">{userData.department}</td>
                       <td className="p-3 text-gray-700">{parseFloat(userData.baseSalary || 0).toFixed(2)}</td>
+                      <td className="p-3 text-gray-700">{parseFloat(userData.baseBonus || 0).toFixed(2)}</td>
                       <td className="p-3 text-gray-700">{parseFloat(userData.medicalInsurance || 0).toFixed(2)}</td>
                       <td className="p-3 text-gray-700">{parseFloat(userData.socialInsurance || 0).toFixed(2)}</td>
                       <td className="p-3 text-gray-700 text-center">{parseInt(userData.annualLeaveBalance || 21, 10)}</td>
                       <td className="p-3 text-gray-700">{parseFloat(userData.eidBonus || 0).toFixed(2)}</td>
                       <td className="p-3 text-gray-700">{parseFloat(userData.advances || 0).toFixed(2)}</td>
-                      <td className="p-3">
+                      <td className="p-3 text-gray-700">{parseInt(userData.monthlyLateAllowance || 120, 10)}</td>
+                      <td className="p-3 text-gray-700">{parseFloat(userData.mealAllowance || 500).toFixed(2)}</td>
+                      <td className="p-3 flex gap-2">
                         <motion.button
                           onClick={() => handleEditClick(userData)}
                           whileHover={{ scale: 1.02 }}
@@ -560,6 +976,16 @@ const UserSettings = () => {
                         >
                           تعديل
                         </motion.button>
+                        {userData.role !== 'admin' && (
+                          <motion.button
+                            onClick={() => handleDeleteClick(userData)}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-all duration-200 text-sm font-medium shadow-sm"
+                          >
+                            حذف
+                          </motion.button>
+                        )}
                       </td>
                     </tr>
                   ))}
