@@ -65,10 +65,10 @@ const ReportTable = ({ reports, onEdit }) => {
         checkOut: report.checkOut && DateTime.fromFormat(report.checkOut, 'hh:mm:ss a', { zone: 'Africa/Cairo' }).isValid
           ? DateTime.fromFormat(report.checkOut, 'hh:mm:ss a', { zone: 'Africa/Cairo' }).toFormat('HH:mm:ss')
           : '',
-        absence: report.absence === 'نعم',
-        annualLeave: report.annualLeave === 'نعم',
-        medicalLeave: report.medicalLeave === 'نعم',
-        officialLeave: report.officialLeave === 'نعم',
+        absence: report.absence === 'نعم' || report.absence === true,
+        annualLeave: report.annualLeave === 'نعم' || report.annualLeave === true,
+        medicalLeave: report.medicalLeave === 'نعم' || report.medicalLeave === true,
+        officialLeave: report.officialLeave === 'نعم' || report.officialLeave === true,
         leaveCompensation: report.leaveCompensation === 'لا' ? 0 : Number(report.leaveCompensation) || 0,
       };
       setSelectedReport(formattedReport);
@@ -97,6 +97,17 @@ const ReportTable = ({ reports, onEdit }) => {
     }
   };
 
+  // حساب رصيد السماح المتبقي لكل تقرير
+  const calculateRemainingLateAllowance = (report, reportsForUser) => {
+    const monthlyLateAllowance = Number(report.monthlyLateAllowance) || 120; // القيمة الافتراضية
+    const totalLateMinutes = reportsForUser
+      .filter(r => DateTime.fromISO(r.date, { zone: 'Africa/Cairo' }).toISODate() <= DateTime.fromISO(report.date, { zone: 'Africa/Cairo' }).toISODate())
+      .reduce((acc, r) => acc + (Number(r.lateMinutes) || 0), 0);
+    const remaining = Math.max(0, monthlyLateAllowance - totalLateMinutes);
+    console.log(`Calculating remainingLateAllowance for ${report.code} on ${report.date}: monthlyLateAllowance=${monthlyLateAllowance}, totalLateMinutes=${totalLateMinutes}, remaining=${remaining}`);
+    return remaining;
+  };
+
   // حساب الإجماليات (فقط إذا كان البحث لمستخدم واحد)
   const totals = isSingleUser
     ? validReports.reduce(
@@ -109,19 +120,21 @@ const ReportTable = ({ reports, onEdit }) => {
                                  report.medicalLeave === 'لا' &&
                                  report.officialLeave === 'لا' &&
                                  (Number(report.leaveCompensation) || 0) === 0 ? 1 : 0;
-            acc.totalAbsenceDays += report.absence === 'نعم' ? 1 : 0;
+            acc.totalAbsenceDays += report.absence === 'نعم' || report.absence === true ? 1 : 0;
             acc.totalLateDays += (Number(report.lateDeduction) || 0) > 0 ? 1 : 0;
             acc.totalDeductions += (Number(report.lateDeduction) || 0) +
                                   (Number(report.earlyLeaveDeduction) || 0) +
                                   (Number(report.medicalLeaveDeduction) || 0);
             acc.totalOvertime += Number(report.overtime) || 0;
             acc.totalWeeklyLeaveDays += Number(report.weeklyLeaveDays) || 0;
-            acc.totalAnnualLeaveDays += report.annualLeave === 'نعم' ? 1 : 0;
-            acc.totalMedicalLeaveDays += report.medicalLeave === 'نعم' ? 1 : 0;
-            acc.totalOfficialLeaveDays += report.officialLeave === 'نعم' ? 1 : 0;
+            acc.totalAnnualLeaveDays += report.annualLeave === 'نعم' || report.annualLeave === true ? 1 : 0;
+            acc.totalMedicalLeaveDays += report.medicalLeave === 'نعم' || report.medicalLeave === true ? 1 : 0;
+            acc.totalOfficialLeaveDays += report.officialLeave === 'نعم' || report.officialLeave === true ? 1 : 0;
             acc.totalLeaveCompensationDays += (Number(report.leaveCompensation) || 0) > 0 ? 1 : 0;
             acc.totalLeaveCompensationValue += Number(report.leaveCompensation) || 0;
             acc.totalAnnualLeaveBalance = Number(report.annualLeaveBalance) || 0;
+            acc.totalLateMinutes += Number(report.lateMinutes) || 0;
+            acc.totalMonthlyLateAllowance = Number(report.monthlyLateAllowance) || 120;
           } catch (error) {
             console.warn('Error processing report for totals:', error, 'Report:', report);
           }
@@ -141,9 +154,16 @@ const ReportTable = ({ reports, onEdit }) => {
           totalLeaveCompensationDays: 0,
           totalLeaveCompensationValue: 0,
           totalAnnualLeaveBalance: 0,
+          totalLateMinutes: 0,
+          totalMonthlyLateAllowance: 0,
         }
       )
     : null;
+
+  // حساب رصيد السماح المتبقي للإجماليات
+  const totalRemainingLateAllowance = isSingleUser
+    ? Math.max(0, totals.totalMonthlyLateAllowance - totals.totalLateMinutes)
+    : 0;
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 font-amiri">
@@ -175,7 +195,7 @@ const ReportTable = ({ reports, onEdit }) => {
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 border-b border-gray-200">بدل الإجازة</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 border-b border-gray-200">أيام العمل الأسبوعية</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 border-b border-gray-200">أيام الإجازة الأسبوعية</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 border-b border-gray-200">رصيد السماح بالتأخير</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 border-b border-gray-200">رصيد السماح المتبقي (دقائق)</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 border-b border-gray-200">رصيد الإجازة السنوية</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 border-b border-gray-200">إجراءات</th>
                 </tr>
@@ -192,17 +212,21 @@ const ReportTable = ({ reports, onEdit }) => {
                     ? DateTime.fromFormat(report.checkOut, 'hh:mm:ss a', { zone: 'Africa/Cairo' })
                     : null;
 
+                  // تصفية التقارير للموظف الحالي
+                  const reportsForUser = validReports.filter(r => r.code === report.code);
+                  const remainingLateAllowance = calculateRemainingLateAllowance(report, reportsForUser);
+
                   return (
                     <motion.tr
                       key={report._id}
                       whileHover={{ backgroundColor: '#e6f7fa' }}
                       transition={{ duration: 0.2 }}
                       className={
-                        report.absence === 'نعم' ? 'bg-red-50' :
-                        report.isSingleFingerprint === 'نعم' ? 'bg-yellow-50' :
-                        report.annualLeave === 'نعم' ? 'bg-green-50' :
-                        report.medicalLeave === 'نعم' ? 'bg-blue-50' :
-                        report.officialLeave === 'نعم' ? 'bg-cyan-50' :
+                        (report.absence === 'نعم' || report.absence === true) ? 'bg-red-50' :
+                        (report.isSingleFingerprint === 'نعم' || report.isSingleFingerprint === true) ? 'bg-yellow-50' :
+                        (report.annualLeave === 'نعم' || report.annualLeave === true) ? 'bg-green-50' :
+                        (report.medicalLeave === 'نعم' || report.medicalLeave === true) ? 'bg-blue-50' :
+                        (report.officialLeave === 'نعم' || report.officialLeave === true) ? 'bg-cyan-50' :
                         (Number(report.leaveCompensation) || 0) > 0 ? 'bg-amber-50' : ''
                       }
                     >
@@ -219,18 +243,18 @@ const ReportTable = ({ reports, onEdit }) => {
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700">{(Number(report.workHours) || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700">{(Number(report.overtime) || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700">{(Number(report.L_DAY_MINUTES) || 0).toFixed(0)}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-700">{(Number(report.lateMinutes) || 0).toFixed(0)}</td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700">{(Number(report.lateDeduction) || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700">{(Number(report.earlyLeaveDeduction) || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.absence || '-'}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.annualLeave || '-'}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.medicalLeave || '-'}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.officialLeave || '-'}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.absence === true || report.absence === 'نعم' ? 'نعم' : 'لا'}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.annualLeave === true || report.annualLeave === 'نعم' ? 'نعم' : 'لا'}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.medicalLeave === true || report.medicalLeave === 'نعم' ? 'نعم' : 'لا'}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.officialLeave === true || report.officialLeave === 'نعم' ? 'نعم' : 'لا'}</td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700">{(Number(report.leaveCompensation) || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700">{Number(report.workDaysPerWeek) || '-'}</td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700">{Number(report.weeklyLeaveDays) || '-'}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.monthlyLateAllowance !== undefined ? report.monthlyLateAllowance : '-'}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.annualLeaveBalance !== undefined ? report.annualLeaveBalance : '-'}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-700">{remainingLateAllowance.toFixed(0)}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-700">{report.annualLeaveBalance !== undefined ? Number(report.annualLeaveBalance).toFixed(0) : '-'}</td>
                       <td className="px-4 py-3 text-right">
                         <motion.button
                           onClick={() => handleEdit(report)}
@@ -330,7 +354,11 @@ const ReportTable = ({ reports, onEdit }) => {
                 </div>
                 <div className="bg-gray-100 p-3 rounded-md text-right">
                   <p className="text-sm font-medium text-gray-600">رصيد الإجازات السنوية</p>
-                  <p className="text-lg font-bold text-gray-700">{totals.totalAnnualLeaveBalance.toFixed(2)} يوم</p>
+                  <p className="text-lg font-bold text-gray-700">{totals.totalAnnualLeaveBalance.toFixed(0)} يوم</p>
+                </div>
+                <div className="bg-gray-200 p-3 rounded-md text-right">
+                  <p className="text-sm font-medium text-gray-600">رصيد السماح المتبقي (دقائق)</p>
+                  <p className="text-lg font-bold text-gray-700">{totalRemainingLateAllowance.toFixed(0)} دقيقة</p>
                 </div>
               </div>
             </div>

@@ -121,6 +121,16 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'إجمالي أيام الإجازة الرسمية يجب ألا يكون سالبًا'],
     },
+    monthlyLateAllowance: {
+      type: Number,
+      default: 120,
+      min: [0, 'رصيد السماح بالتأخير يجب ألا يكون سالبًا'],
+    },
+    remainingLateAllowance: {
+      type: Number,
+      default: 120,
+      min: [0, 'رصيد السماح المتبقي يجب ألا يكون سالبًا'],
+    },
     lastResetDate: {
       type: Date,
       default: () => DateTime.now().setZone('Africa/Cairo').startOf('month').toJSDate(),
@@ -164,6 +174,7 @@ userSchema.pre('save', async function (next) {
       ? DateTime.fromJSDate(this.lastAnnualLeaveResetDate, { zone: 'Africa/Cairo' })
       : now;
 
+    // إعادة تعيين رصيد الإجازة السنوية سنويًا
     if (now.year !== lastAnnualReset.year) {
       this.customAnnualLeave = Math.min(this.annualLeaveBalance || 21, 7);
       this.annualLeaveBalance = 21;
@@ -173,6 +184,18 @@ userSchema.pre('save', async function (next) {
       );
     }
 
+    // التأكد من أن remainingLateAllowance لا يتجاوز monthlyLateAllowance
+    if (this.isModified('remainingLateAllowance')) {
+      const monthlyLateAllowance = this.monthlyLateAllowance || 120;
+      if (this.remainingLateAllowance > monthlyLateAllowance) {
+        this.remainingLateAllowance = monthlyLateAllowance;
+        console.log(
+          `Adjusted remainingLateAllowance for ${this.code} to ${this.remainingLateAllowance} to not exceed monthlyLateAllowance`
+        );
+      }
+    }
+
+    // تسجيل التغييرات
     if (this.isModified('violationsInstallment')) {
       console.log(
         `Updating violationsInstallment for user ${this.code}: Previous=${this.get(
@@ -212,6 +235,26 @@ userSchema.pre('save', async function (next) {
           null,
           { getters: false }
         )}, New=${this.customAnnualLeave}`
+      );
+    }
+
+    if (this.isModified('monthlyLateAllowance')) {
+      console.log(
+        `Updating monthlyLateAllowance for user ${this.code}: Previous=${this.get(
+          'monthlyLateAllowance',
+          null,
+          { getters: false }
+        )}, New=${this.monthlyLateAllowance}`
+      );
+    }
+
+    if (this.isModified('remainingLateAllowance')) {
+      console.log(
+        `Updating remainingLateAllowance for user ${this.code}: Previous=${this.get(
+          'remainingLateAllowance',
+          null,
+          { getters: false }
+        )}, New=${this.remainingLateAllowance}`
       );
     }
 
@@ -323,15 +366,23 @@ userSchema.virtual('netSalary').get(async function () {
     console.log(
       `Calculated netSalary for ${this.code}: ${netSalary}, deductionsValue: ${deductionsValue}, ` +
         `violationsInstallment: ${this.violationsInstallment}, advances: ${this.advances}, ` +
-        `leaveCompensationValue: ${totals.totalLeaveCompensationValue}, appropriateValue: ${totals.totalAppropriateValue}`
+        `leaveCompensationValue: ${totals.totalLeaveCompensationValue}, appropriateValue: ${totals.totalAppropriateValue}, ` +
+        `monthlyLateAllowance: ${this.monthlyLateAllowance}, remainingLateAllowance: ${this.remainingLateAllowance}`
     );
     return {
       netSalary: parseFloat(netSalary),
       employeeName: this.fullName,
+      monthlyLateAllowance: this.monthlyLateAllowance,
+      remainingLateAllowance: this.remainingLateAllowance,
     };
   } catch (error) {
     console.error(`Error calculating netSalary for user ${this.code}:`, error.message, error.stack);
-    return { netSalary: 0, employeeName: this.fullName };
+    return {
+      netSalary: 0,
+      employeeName: this.fullName,
+      monthlyLateAllowance: this.monthlyLateAllowance || 120,
+      remainingLateAllowance: this.remainingLateAllowance || 120,
+    };
   }
 });
 

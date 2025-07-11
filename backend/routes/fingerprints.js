@@ -110,6 +110,12 @@ const calculateWorkDaysInRange = (startDate, endDate, workDaysPerWeek) => {
 async function handleLateDeduction(report) {
   try {
     const user = await User.findOne({ code: report.code });
+    if (!user) {
+      console.warn(`User not found for code ${report.code}`);
+      report.lateMinutes = 0;
+      report.lateDeduction = 0;
+      return;
+    }
 
     // تجاهل الخصم إذا كان هناك إجازة أو يوم عطلة أسبوعية
     if (
@@ -140,19 +146,48 @@ async function handleLateDeduction(report) {
       const diffMs = checkInTime.toMillis() - expectedStartTime.toMillis();
       const diffMinutes = Math.floor(diffMs / (1000 * 60));
 
-      if (diffMinutes > 45) { // التأخير بعد 9:16 صباحًا
+      // التحقق من رصيد السماح
+      const monthlyLateAllowance = user.monthlyLateAllowance || 120;
+      let remainingAllowance = monthlyLateAllowance;
+
+      // جلب كل سجلات التأخير السابقة في نفس الشهر لتحديث رصيد السماح
+      const startOfMonth = DateTime.fromJSDate(report.date).startOf('month').toJSDate();
+      const endOfDay = DateTime.fromJSDate(report.date).endOf('day').toJSDate();
+      const previousReports = await Fingerprint.find({
+        code: report.code,
+        date: { $gte: startOfMonth, $lte: endOfDay },
+        lateMinutes: { $gt: 0 },
+      });
+
+      // حساب إجمالي دقائق التأخير المستخدمة في الشهر
+      const usedAllowance = previousReports
+        .filter(r => r._id.toString() !== report._id.toString())
+        .reduce((sum, r) => sum + r.lateMinutes, 0);
+      remainingAllowance -= usedAllowance;
+
+      if (diffMinutes > 0) {
         report.lateMinutes = diffMinutes;
-        if (checkInTime.toMillis() >= lateThreshold.toMillis()) {
-          report.lateDeduction = 0.5; // خصم 1/2 يوم بعد 11:00
-          console.log(`Late deduction for ${report.code} on ${DateTime.fromJSDate(report.date).toISODate()}: 0.5 (threshold exceeded)`);
+
+        // إذا كان هناك رصيد سماح كافٍ
+        if (remainingAllowance >= diffMinutes) {
+          report.lateDeduction = 0; // لا خصم إذا كان التأخير مغطى برصيد السماح
+          console.log(`Late minutes covered by allowance for ${report.code} on ${DateTime.fromJSDate(report.date).toISODate()}: ${diffMinutes} minutes, remaining allowance: ${remainingAllowance - diffMinutes}`);
         } else {
-          report.lateDeduction = 0.25; // خصم 1/4 يوم بين 9:16 و11:00
-          console.log(`Late deduction for ${report.code} on ${DateTime.fromJSDate(report.date).toISODate()}: 0.25 (late limit exceeded)`);
+          // تطبيق الخصم إذا تجاوز التأخير رصيد السماح
+          if (diffMinutes > 45) {
+            report.lateDeduction = checkInTime.toMillis() >= lateThreshold.toMillis() ? 0.5 : 0.25;
+            console.log(`Late deduction for ${report.code} on ${DateTime.fromJSDate(report.date).toISODate()}: ${report.lateDeduction} (insufficient allowance)`);
+          } else {
+            report.lateDeduction = 0;
+          }
         }
       } else {
-        report.lateMinutes = diffMinutes > 0 ? diffMinutes : 0;
+        report.lateMinutes = 0;
         report.lateDeduction = 0;
       }
+
+      // تحديث رصيد السماح في السجل
+      report.monthlyLateAllowance = Math.max(0, remainingAllowance - diffMinutes);
     } else {
       report.lateMinutes = 0;
       report.lateDeduction = 0;
@@ -163,7 +198,6 @@ async function handleLateDeduction(report) {
     report.lateDeduction = 0;
   }
 }
-
 async function handleEarlyLeaveDeduction(report) {
   try {
     const user = await User.findOne({ code: report.code });
@@ -795,7 +829,6 @@ router.get('/', authMiddleware, async (req, res) => {
       totalLateDays,
     });
   } catch (error) {
-	  A
     console.error('Error in search route:', error.message);
     res.status(500).json({ message: 'خطأ في البحث', error: error.message });
   }

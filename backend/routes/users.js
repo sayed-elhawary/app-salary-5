@@ -196,7 +196,27 @@ router.put('/:code', authMiddleware, async (req, res) => {
   const cache = req.app.get('cache'); // جلب cache من app
   try {
     console.log('Received update request for user:', req.params.code, 'Data:', req.body);
-    const { penaltiesValue, violationsInstallment, totalViolationsValue, advances, deductionsValue, createdBy } = req.body;
+    const {
+      penaltiesValue,
+      violationsInstallment,
+      totalViolationsValue,
+      advances,
+      deductionsValue,
+      createdBy,
+      monthlyLateAllowance,
+      baseSalary,
+      baseBonus,
+      bonusPercentage,
+      mealAllowance,
+      medicalInsurance,
+      socialInsurance,
+      workDaysPerWeek,
+      status,
+      annualLeaveBalance,
+      eidBonus,
+      customAnnualLeave,
+      totalOfficialLeaveDays,
+    } = req.body;
 
     // التحقق من وجود حقل واحد على الأقل للتعديل
     if (
@@ -204,10 +224,23 @@ router.put('/:code', authMiddleware, async (req, res) => {
       violationsInstallment === undefined &&
       advances === undefined &&
       totalViolationsValue === undefined &&
-      deductionsValue === undefined
+      deductionsValue === undefined &&
+      monthlyLateAllowance === undefined &&
+      baseSalary === undefined &&
+      baseBonus === undefined &&
+      bonusPercentage === undefined &&
+      mealAllowance === undefined &&
+      medicalInsurance === undefined &&
+      socialInsurance === undefined &&
+      workDaysPerWeek === undefined &&
+      status === undefined &&
+      annualLeaveBalance === undefined &&
+      eidBonus === undefined &&
+      customAnnualLeave === undefined &&
+      totalOfficialLeaveDays === undefined
     ) {
       console.error('No valid fields provided for update');
-      return res.status(400).json({ message: 'يجب تقديم حقل واحد على الأقل للتعديل (قيمة الجزاءات، قسط المخالفات، السلف)' });
+      return res.status(400).json({ message: 'يجب تقديم حقل واحد على الأقل للتعديل' });
     }
 
     // التحقق من القيم الرقمية
@@ -217,6 +250,18 @@ router.put('/:code', authMiddleware, async (req, res) => {
       totalViolationsValue,
       advances,
       deductionsValue,
+      monthlyLateAllowance,
+      baseSalary,
+      baseBonus,
+      bonusPercentage,
+      mealAllowance,
+      medicalInsurance,
+      socialInsurance,
+      workDaysPerWeek,
+      annualLeaveBalance,
+      eidBonus,
+      customAnnualLeave,
+      totalOfficialLeaveDays,
     };
     for (const [key, value] of Object.entries(numericFields)) {
       if (value !== undefined && (isNaN(value) || value < 0)) {
@@ -238,6 +283,19 @@ router.put('/:code', authMiddleware, async (req, res) => {
     user.totalViolationsValue = totalViolationsValue !== undefined ? parseFloat(totalViolationsValue) : user.totalViolationsValue;
     user.advances = advances !== undefined ? parseFloat(advances) : user.advances;
     user.deductionsValue = deductionsValue !== undefined ? parseFloat(deductionsValue) : user.deductionsValue;
+    user.monthlyLateAllowance = monthlyLateAllowance !== undefined ? parseFloat(monthlyLateAllowance) : user.monthlyLateAllowance;
+    user.baseSalary = baseSalary !== undefined ? parseFloat(baseSalary) : user.baseSalary;
+    user.baseBonus = baseBonus !== undefined ? parseFloat(baseBonus) : user.baseBonus;
+    user.bonusPercentage = bonusPercentage !== undefined ? parseFloat(bonusPercentage) : user.bonusPercentage;
+    user.mealAllowance = mealAllowance !== undefined ? parseFloat(mealAllowance) : user.mealAllowance;
+    user.medicalInsurance = medicalInsurance !== undefined ? parseFloat(medicalInsurance) : user.medicalInsurance;
+    user.socialInsurance = socialInsurance !== undefined ? parseFloat(socialInsurance) : user.socialInsurance;
+    user.workDaysPerWeek = workDaysPerWeek !== undefined ? parseInt(workDaysPerWeek) : user.workDaysPerWeek;
+    user.status = status !== undefined ? status : user.status;
+    user.annualLeaveBalance = annualLeaveBalance !== undefined ? parseInt(annualLeaveBalance) : user.annualLeaveBalance;
+    user.eidBonus = eidBonus !== undefined ? parseFloat(eidBonus) : user.eidBonus;
+    user.customAnnualLeave = customAnnualLeave !== undefined ? parseInt(customAnnualLeave) : user.customAnnualLeave;
+    user.totalOfficialLeaveDays = totalOfficialLeaveDays !== undefined ? parseInt(totalOfficialLeaveDays) : user.totalOfficialLeaveDays;
     user.createdBy = createdBy || user.createdBy;
 
     // تسجيل البيانات قبل الحفظ
@@ -248,6 +306,19 @@ router.put('/:code', authMiddleware, async (req, res) => {
       totalViolationsValue: user.totalViolationsValue,
       advances: user.advances,
       deductionsValue: user.deductionsValue,
+      monthlyLateAllowance: user.monthlyLateAllowance,
+      baseSalary: user.baseSalary,
+      baseBonus: user.baseBonus,
+      bonusPercentage: user.bonusPercentage,
+      mealAllowance: user.mealAllowance,
+      medicalInsurance: user.medicalInsurance,
+      socialInsurance: user.socialInsurance,
+      workDaysPerWeek: user.workDaysPerWeek,
+      status: user.status,
+      annualLeaveBalance: user.annualLeaveBalance,
+      eidBonus: user.eidBonus,
+      customAnnualLeave: user.customAnnualLeave,
+      totalOfficialLeaveDays: user.totalOfficialLeaveDays,
     });
 
     // حفظ التغييرات
@@ -279,6 +350,7 @@ router.put('/:code', authMiddleware, async (req, res) => {
       totalViolationsValue: user.totalViolationsValue,
       advances: user.advances,
       deductionsValue: user.deductionsValue,
+      monthlyLateAllowance: user.monthlyLateAllowance,
       netSalary: netSalaryData.netSalary,
     });
 
